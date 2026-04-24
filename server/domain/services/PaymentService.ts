@@ -1,5 +1,7 @@
 import { injectable } from "tsyringe";
 import Stripe from "stripe";
+import { ENV } from "../../_core/env";
+import { PixNotificationService, PixNotificationPayload } from "../../infrastructure/discord/PixNotificationService";
 
 export interface PixPaymentData {
   amount: string;
@@ -26,9 +28,10 @@ export interface PaymentResult {
 export class PaymentService {
   private stripe: Stripe;
   private pixKey: string;
+  private pixNotificationService: PixNotificationService;
 
   constructor() {
-    const stripeKey = process.env.STRIPE_SECRET_KEY;
+    const stripeKey = ENV.stripeSecretKey;
     if (!stripeKey) {
       throw new Error("STRIPE_SECRET_KEY not configured");
     }
@@ -37,7 +40,8 @@ export class PaymentService {
       apiVersion: "2024-04-10",
     });
 
-    this.pixKey = process.env.PIX_KEY || "";
+    this.pixKey = ENV.pixKey || "";
+    this.pixNotificationService = new PixNotificationService();
   }
 
   /**
@@ -155,6 +159,30 @@ export class PaymentService {
     } catch (error) {
       console.error("Refund error:", error);
       return false;
+    }
+  }
+
+  /**
+   * Confirm PIX payment manually (admin action)
+   */
+  async confirmPixPayment(orderId: number, userName: string): Promise<void> {
+    try {
+      await this.pixNotificationService.notifyPaymentConfirmed(orderId, userName);
+    } catch (error) {
+      console.error("Error confirming PIX payment:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Cancel PIX payment
+   */
+  async cancelPixPayment(orderId: number, reason: string): Promise<void> {
+    try {
+      await this.pixNotificationService.notifyPaymentCancelled(orderId, reason);
+    } catch (error) {
+      console.error("Error cancelling PIX payment:", error);
+      throw error;
     }
   }
 
