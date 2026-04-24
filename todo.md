@@ -47,8 +47,8 @@
 - [x] Implementar página de vitrine de produtos
 - [x] Implementar botões de remover/atualizar quantidade
 - [x] Implementar página de checkout
-- [ ] Integrar PIX (MercadoPago/Stripe)
-- [ ] Integrar Cartão de Crédito
+- [x] Integrar PIX (MercadoPago/Stripe)
+- [x] Integrar Cartão de Crédito
 
 ## Fase 9: Rastreamento e Notificações
 - [x] Implementar sistema de status de pedidos
@@ -65,7 +65,7 @@
 ## Fase 11: Testes e Documentação
 - [x] Escrever testes unitários com Vitest
 - [x] Escrever testes de integração
-- [ ] Criar Dockerfile
+- [x] Criar Dockerfile
 - [x] Criar documentação do projeto
 - [x] Criar guia de deployment
 
