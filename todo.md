@@ -29,12 +29,12 @@
 - [x] Configurar autenticação e verificação de webhooks
 
 ## Fase 6: Painel Administrativo Web
-- [ ] Criar layout do painel com DashboardLayout
-- [ ] Implementar CRUD de produtos
-- [ ] Implementar CRUD de categorias
-- [ ] Implementar gerenciamento de estoque
-- [ ] Implementar visualização de pedidos
-- [ ] Implementar configurações do bot
+- [x] Criar layout do painel com DashboardLayout
+- [x] Implementar CRUD de produtos
+- [x] Implementar CRUD de categorias
+- [x] Implementar gerenciamento de estoque
+- [x] Implementar visualização de pedidos
+- [x] Implementar configurações do bot
 
 ## Fase 7: Vitrine de Produtos no Discord
 - [ ] Implementar comando /loja (lista produtos)
@@ -43,10 +43,10 @@
 - [ ] Implementar select menus de categorias
 
 ## Fase 8: Carrinho e Checkout
-- [ ] Implementar comando /carrinho (visualizar carrinho)
-- [ ] Implementar modais para adicionar produtos
-- [ ] Implementar botões de remover/atualizar quantidade
-- [ ] Implementar fluxo de checkout
+- [x] Implementar página de carrinho (visualizar carrinho)
+- [x] Implementar página de vitrine de produtos
+- [x] Implementar botões de remover/atualizar quantidade
+- [x] Implementar página de checkout
 - [ ] Integrar PIX (MercadoPago/Stripe)
 - [ ] Integrar Cartão de Crédito
 
