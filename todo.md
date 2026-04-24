@@ -1,15 +1,15 @@
 # Discord Marketplace Bot - TODO
 
 ## Fase 1: Planejamento e Arquitetura
-- [ ] Revisar documentação da Manus API
-- [ ] Definir arquitetura de Clean Architecture e DDD
-- [ ] Planejar estrutura de pastas e módulos
+- [x] Revisar documentação da Manus API
+- [x] Definir arquitetura de Clean Architecture e DDD
+- [x] Planejar estrutura de pastas e módulos
 
 ## Fase 2: Configuração Base
 - [x] Instalar dependências: discord.js, Fastify, Stripe/MercadoPago, TSyringe, Zod, Pino
-- [ ] Configurar variáveis de ambiente
+- [x] Configurar variáveis de ambiente
 - [x] Configurar Drizzle ORM e conexão com Supabase
-- [ ] Configurar cache LRU
+- [x] Configurar cache LRU
 
 ## Fase 3: Schema de Banco de Dados
 - [x] Criar tabelas: users, categories, products, cart_items, orders, order_items, bot_config
