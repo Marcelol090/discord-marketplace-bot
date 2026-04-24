@@ -37,10 +37,10 @@
 - [x] Implementar configurações do bot
 
 ## Fase 7: Vitrine de Produtos no Discord
-- [ ] Implementar comando /loja (lista produtos)
-- [ ] Implementar embeds de produtos
-- [ ] Implementar botões de navegação (próximo, anterior, adicionar ao carrinho)
-- [ ] Implementar select menus de categorias
+- [x] Implementar comando /loja (lista produtos)
+- [x] Implementar embeds de produtos
+- [x] Implementar botões de navegação (próximo, anterior, adicionar ao carrinho)
+- [x] Implementar select menus de categorias
 
 ## Fase 8: Carrinho e Checkout
 - [x] Implementar página de carrinho (visualizar carrinho)
@@ -51,25 +51,25 @@
 - [ ] Integrar Cartão de Crédito
 
 ## Fase 9: Rastreamento e Notificações
-- [ ] Implementar sistema de status de pedidos
-- [ ] Implementar notificações automáticas no Discord
-- [ ] Implementar webhook de confirmação de pagamento
-- [ ] Implementar atualizações de status
+- [x] Implementar sistema de status de pedidos
+- [x] Implementar notificações automáticas no Discord
+- [x] Implementar webhook de confirmação de pagamento
+- [x] Implementar atualizações de status
 
 ## Fase 10: Dashboard de Métricas
-- [ ] Implementar gráficos de vendas
-- [ ] Implementar lista de produtos mais vendidos
-- [ ] Implementar cálculo de receita total
-- [ ] Implementar lista de pedidos recentes
+- [x] Implementar gráficos de vendas
+- [x] Implementar lista de produtos mais vendidos
+- [x] Implementar cálculo de receita total
+- [x] Implementar lista de pedidos recentes
 
 ## Fase 11: Testes e Documentação
-- [ ] Escrever testes unitários com Vitest
-- [ ] Escrever testes de integração
+- [x] Escrever testes unitários com Vitest
+- [x] Escrever testes de integração
 - [ ] Criar Dockerfile
-- [ ] Criar documentação do projeto
-- [ ] Criar guia de deployment
+- [x] Criar documentação do projeto
+- [x] Criar guia de deployment
 
 ## Fase 12: Entrega
-- [ ] Revisar código
-- [ ] Criar checkpoint final
-- [ ] Entregar projeto ao usuário
+- [x] Revisar código
+- [x] Criar checkpoint final
+- [x] Entregar projeto ao usuário
