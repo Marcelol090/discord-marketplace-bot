@@ -14,6 +14,8 @@
     "allowImportingTsExtensions": true,
     "moduleResolution": "bundler",
     "baseUrl": ".",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
     "types": ["node", "vite/client"],
     "paths": {
       "@/*": ["./client/src/*"],
