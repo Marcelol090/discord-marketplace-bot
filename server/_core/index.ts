@@ -9,6 +9,9 @@ import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import slashCommandsRouter from "../infrastructure/routes/slash-commands";
+import paymentWebhookRouter from "../infrastructure/routes/payment-webhook";
+import discordWebhookRouter from "../infrastructure/routes/discord-webhook";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -37,6 +40,16 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+  
+  // Discord Slash Commands Routes
+  app.use("/api/discord", slashCommandsRouter);
+  
+  // Payment Webhook Routes
+  app.use("/api/payment", paymentWebhookRouter);
+  
+  // Discord Webhook Routes
+  app.use("/api/discord/webhook", discordWebhookRouter);
+  
   // tRPC API
   app.use(
     "/api/trpc",

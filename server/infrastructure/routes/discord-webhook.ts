@@ -496,3 +496,5 @@ async function handleCategorySelect(
     );
   }
 }
+
+export default registerDiscordWebhookRoutes;

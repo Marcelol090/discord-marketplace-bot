@@ -3,6 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useEffect } from "react";
 import { useLocation } from "wouter";
+import DashboardTab from "@/pages/admin/DashboardTab";
 import ProductsTab from "@/pages/admin/ProductsTab";
 import CategoriesTab from "@/pages/admin/CategoriesTab";
 import OrdersTab from "@/pages/admin/OrdersTab";
@@ -49,13 +50,18 @@ export default function Admin() {
           </p>
         </div>
 
-        <Tabs defaultValue="products" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+        <Tabs defaultValue="dashboard" className="w-full">
+          <TabsList className="grid w-full grid-cols-5">
+            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
             <TabsTrigger value="products">Produtos</TabsTrigger>
             <TabsTrigger value="categories">Categorias</TabsTrigger>
             <TabsTrigger value="orders">Pedidos</TabsTrigger>
             <TabsTrigger value="settings">Configurações</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="dashboard" className="space-y-4">
+            <DashboardTab />
+          </TabsContent>
 
           <TabsContent value="products" className="space-y-4">
             <ProductsTab />
