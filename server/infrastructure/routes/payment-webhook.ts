@@ -1,15 +1,16 @@
 import { Router, Request, Response } from "express";
+import Stripe from "stripe";
 import { container } from "../di/container";
 import { OrderService } from "../../domain/services/OrderService";
 import { PaymentService } from "../../domain/services/PaymentService";
-import Stripe from "stripe";
+import { ENV } from "../../_core/env";
 
 const router = Router();
 const orderService = container.resolve(OrderService);
 const paymentService = container.resolve(PaymentService);
 
 // Webhook secret do Stripe (deve ser configurado como variável de ambiente)
-const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET || "";
+const stripeWebhookSecret = ENV.stripeWebhookSecret;
 
 /**
  * POST /api/payment/stripe-webhook
@@ -27,28 +28,53 @@ router.post("/stripe-webhook", async (req: Request, res: Response) => {
     let event: Stripe.Event;
 
     try {
-      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
+      const stripe = new Stripe(ENV.stripeSecretKey || "", {
         apiVersion: "2024-04-10",
       });
 
-      event = stripe.webhooks.constructEvent((req as any).rawBody, signature, stripeWebhookSecret);
-    } catch (error: any) {
-      console.error("Webhook signature verification failed:", error.message);
-      return res.status(400).json({ error: "Invalid signature" });
+      event = stripe.webhooks.constructEvent(
+        req.body,
+        signature,
+        stripeWebhookSecret
+      );
+    } catch (err) {
+      console.error("Webhook signature verification failed:", err);
+      return res.status(400).send(`Webhook Error: ${err}`);
     }
 
-    // Processar diferentes tipos de eventos
+    // Handle different event types
     switch (event.type) {
       case "payment_intent.succeeded":
-        await handlePaymentIntentSucceeded(event.data.object as Stripe.PaymentIntent);
+        const paymentIntent = event.data.object as Stripe.PaymentIntent;
+        console.log("Payment succeeded:", paymentIntent.id);
+        
+        // Mark order as paid
+        if (paymentIntent.metadata?.orderId) {
+          await orderService.markOrderAsPaid(
+            parseInt(paymentIntent.metadata.orderId),
+            paymentIntent.id
+          );
+        }
         break;
 
       case "payment_intent.payment_failed":
-        await handlePaymentIntentFailed(event.data.object as Stripe.PaymentIntent);
+        const failedIntent = event.data.object as Stripe.PaymentIntent;
+        console.log("Payment failed:", failedIntent.id);
+        
+        // Log failed payment
+        if (failedIntent.metadata?.orderId) {
+          console.log("Order payment failed:", failedIntent.metadata.orderId);
+        }
         break;
 
       case "charge.refunded":
-        await handleChargeRefunded(event.data.object as Stripe.Charge);
+        const refundedCharge = event.data.object as Stripe.Charge;
+        console.log("Charge refunded:", refundedCharge.id);
+        
+        // Log refund
+        if (refundedCharge.metadata?.orderId) {
+          console.log("Order refunded:", refundedCharge.metadata.orderId);
+        }
         break;
 
       default:
@@ -56,144 +82,65 @@ router.post("/stripe-webhook", async (req: Request, res: Response) => {
     }
 
     res.json({ received: true });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Stripe webhook error:", error);
-    res.status(500).json({ error: "Webhook processing failed" });
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
 /**
  * POST /api/payment/pix-webhook
- * Recebe confirmações de pagamento PIX (para integração com MercadoPago/Stripe PIX)
+ * Recebe confirmações de pagamento PIX
  */
 router.post("/pix-webhook", async (req: Request, res: Response) => {
   try {
-    const { orderId, status, transactionId, amount } = req.body;
+    const { orderId, pixKey } = req.body;
 
-    if (!orderId || !status) {
-      return res.status(400).json({ error: "Missing required fields" });
+    if (!orderId) {
+      return res.status(400).json({ error: "Missing orderId" });
     }
 
-    console.log(`📱 PIX Webhook recebido - Pedido #${orderId}, Status: ${status}`);
-
-    // Atualizar status do pedido
-    if (status === "paid" || status === "confirmed") {
-      // Confirmar pagamento
-      await paymentService.confirmPixPayment(orderId, "PIX Payment Confirmed");
-
-      // Atualizar pedido no banco de dados
-      // await orderService.updateOrderStatus(orderId, "paid");
-
-      console.log(`✅ Pedido #${orderId} marcado como pago`);
-    } else if (status === "failed" || status === "cancelled") {
-      // Cancelar pagamento
-      await paymentService.cancelPixPayment(orderId, `PIX payment ${status}`);
-
-      console.log(`❌ Pedido #${orderId} pagamento ${status}`);
+    // Verify PIX key
+    if (pixKey !== ENV.pixKey) {
+      return res.status(401).json({ error: "Invalid PIX key" });
     }
 
-    res.json({
-      success: true,
-      message: "PIX webhook processed",
-    });
-  } catch (error: any) {
+    // Mark order as paid
+    await orderService.markOrderAsPaid(orderId, `pix_${Date.now()}`);
+
+    res.json({ success: true });
+  } catch (error) {
     console.error("PIX webhook error:", error);
-    res.status(500).json({ error: "Webhook processing failed" });
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
 /**
  * POST /api/payment/manual-confirm
- * Endpoint para confirmar pagamento PIX manualmente (admin)
+ * Confirmar pagamento PIX manualmente (para testes)
  */
 router.post("/manual-confirm", async (req: Request, res: Response) => {
   try {
-    const { orderId, userName } = req.body;
+    const { orderId, pixKey } = req.body;
 
-    if (!orderId || !userName) {
-      return res.status(400).json({ error: "Missing required fields" });
+    if (!orderId) {
+      return res.status(400).json({ error: "Missing orderId" });
     }
 
-    // Confirmar pagamento
-    await paymentService.confirmPixPayment(orderId, userName);
+    // Verify PIX key
+    if (pixKey !== ENV.pixKey) {
+      return res.status(401).json({ error: "Invalid PIX key" });
+    }
 
-    // Atualizar pedido no banco de dados
-    // await orderService.updateOrderStatus(orderId, "paid");
+    // Mark order as paid
+    await orderService.markOrderAsPaid(orderId, `pix_manual_${Date.now()}`);
 
-    res.json({
-      success: true,
-      message: `Pedido #${orderId} confirmado manualmente`,
-    });
-  } catch (error: any) {
+    res.json({ success: true, message: "Order marked as paid" });
+  } catch (error) {
     console.error("Manual confirm error:", error);
-    res.status(500).json({ error: "Failed to confirm payment" });
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
-/**
- * Handlers para eventos do Stripe
- */
-async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent) {
-  try {
-    const orderId = paymentIntent.metadata?.orderId;
-
-    if (!orderId) {
-      console.warn("Payment intent succeeded but no orderId in metadata");
-      return;
-    }
-
-    console.log(`✅ Pagamento Stripe confirmado - Pedido #${orderId}`);
-
-    // Atualizar status do pedido para "paid"
-    // await orderService.updateOrderStatus(parseInt(orderId), "paid");
-
-    // Enviar notificação de sucesso
-    // await notificationService.notifyPaymentSuccess(orderId);
-  } catch (error) {
-    console.error("Error handling payment intent succeeded:", error);
-  }
-}
-
-async function handlePaymentIntentFailed(paymentIntent: Stripe.PaymentIntent) {
-  try {
-    const orderId = paymentIntent.metadata?.orderId;
-
-    if (!orderId) {
-      console.warn("Payment intent failed but no orderId in metadata");
-      return;
-    }
-
-    console.log(`❌ Pagamento Stripe falhou - Pedido #${orderId}`);
-
-    // Atualizar status do pedido para "failed"
-    // await orderService.updateOrderStatus(parseInt(orderId), "failed");
-
-    // Enviar notificação de falha
-    // await notificationService.notifyPaymentFailed(orderId);
-  } catch (error) {
-    console.error("Error handling payment intent failed:", error);
-  }
-}
-
-async function handleChargeRefunded(charge: Stripe.Charge) {
-  try {
-    const orderId = charge.metadata?.orderId;
-
-    if (!orderId) {
-      console.warn("Charge refunded but no orderId in metadata");
-      return;
-    }
-
-    console.log(`💰 Reembolso processado - Pedido #${orderId}`);
-
-    // Atualizar status do pedido para "refunded"
-    // await orderService.updateOrderStatus(parseInt(orderId), "refunded");
-
-    // Enviar notificação de reembolso
-    // await notificationService.notifyRefund(orderId);
-  } catch (error) {
-    console.error("Error handling charge refunded:", error);
-  }
-}
-
 export default router;
+

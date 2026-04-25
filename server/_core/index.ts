@@ -12,6 +12,7 @@ import { serveStatic, setupVite } from "./vite";
 import slashCommandsRouter from "../infrastructure/routes/slash-commands";
 import paymentWebhookRouter from "../infrastructure/routes/payment-webhook";
 import discordWebhookRouter from "../infrastructure/routes/discord-webhook";
+import { setupDependencyInjection } from "../infrastructure/di/container";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -33,6 +34,9 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  // Initialize dependency injection
+  setupDependencyInjection();
+  
   const app = express();
   const server = createServer(app);
   // Configure body parser with larger size limit for file uploads
