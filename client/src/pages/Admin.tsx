@@ -8,6 +8,13 @@ import ProductsTab from "@/pages/admin/ProductsTab";
 import CategoriesTab from "@/pages/admin/CategoriesTab";
 import OrdersTab from "@/pages/admin/OrdersTab";
 import SettingsTab from "@/pages/admin/SettingsTab";
+import {
+  BarChart3,
+  ShoppingCart,
+  Package,
+  Settings,
+  LayoutDashboard,
+} from "lucide-react";
 
 export default function Admin() {
   const { user, loading } = useAuth();
@@ -43,41 +50,80 @@ export default function Admin() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold">Painel Administrativo</h1>
-          <p className="text-muted-foreground">
-            Gerencie produtos, categorias, pedidos e configurações
+        {/* Header com gradiente */}
+        <div className="bg-gradient-to-r from-blue-600 to-blue-800 rounded-lg p-8 text-white shadow-lg">
+          <div className="flex items-center gap-3 mb-2">
+            <BarChart3 className="w-8 h-8" />
+            <h1 className="text-4xl font-bold">Painel Administrativo</h1>
+          </div>
+          <p className="text-blue-100 text-lg">
+            Gerencie produtos, categorias, pedidos e configurações do seu
+            marketplace
           </p>
         </div>
 
+        {/* Tabs com ícones */}
         <Tabs defaultValue="dashboard" className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-            <TabsTrigger value="products">Produtos</TabsTrigger>
-            <TabsTrigger value="categories">Categorias</TabsTrigger>
-            <TabsTrigger value="orders">Pedidos</TabsTrigger>
-            <TabsTrigger value="settings">Configurações</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-5 bg-slate-100 p-1 rounded-lg">
+            <TabsTrigger
+              value="dashboard"
+              className="flex items-center gap-2 rounded-md"
+            >
+              <LayoutDashboard className="w-4 h-4" />
+              <span className="hidden sm:inline">Dashboard</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="products"
+              className="flex items-center gap-2 rounded-md"
+            >
+              <Package className="w-4 h-4" />
+              <span className="hidden sm:inline">Produtos</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="categories"
+              className="flex items-center gap-2 rounded-md"
+            >
+              <ShoppingCart className="w-4 h-4" />
+              <span className="hidden sm:inline">Categorias</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="orders"
+              className="flex items-center gap-2 rounded-md"
+            >
+              <ShoppingCart className="w-4 h-4" />
+              <span className="hidden sm:inline">Pedidos</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="settings"
+              className="flex items-center gap-2 rounded-md"
+            >
+              <Settings className="w-4 h-4" />
+              <span className="hidden sm:inline">Configurações</span>
+            </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="dashboard" className="space-y-4">
-            <DashboardTab />
-          </TabsContent>
+          {/* Tab Contents */}
+          <div className="mt-6 bg-white rounded-lg shadow-sm border border-slate-200">
+            <TabsContent value="dashboard" className="p-6 space-y-4">
+              <DashboardTab />
+            </TabsContent>
 
-          <TabsContent value="products" className="space-y-4">
-            <ProductsTab />
-          </TabsContent>
+            <TabsContent value="products" className="p-6 space-y-4">
+              <ProductsTab />
+            </TabsContent>
 
-          <TabsContent value="categories" className="space-y-4">
-            <CategoriesTab />
-          </TabsContent>
+            <TabsContent value="categories" className="p-6 space-y-4">
+              <CategoriesTab />
+            </TabsContent>
 
-          <TabsContent value="orders" className="space-y-4">
-            <OrdersTab />
-          </TabsContent>
+            <TabsContent value="orders" className="p-6 space-y-4">
+              <OrdersTab />
+            </TabsContent>
 
-          <TabsContent value="settings" className="space-y-4">
-            <SettingsTab />
-          </TabsContent>
+            <TabsContent value="settings" className="p-6 space-y-4">
+              <SettingsTab />
+            </TabsContent>
+          </div>
         </Tabs>
       </div>
     </DashboardLayout>

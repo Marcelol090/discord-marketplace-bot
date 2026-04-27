@@ -157,16 +157,29 @@ async function handleShopCommand(
     }));
 
     const embed = {
-      title: "🛍️ Marketplace",
-      description: "Bem-vindo à nossa loja! Selecione uma categoria para ver os produtos.",
-      color: 0x5865f2,
+      title: "🛍️ Marketplace - Bem-vindo!",
+      description: "Explore nossos produtos incríveis. Selecione uma categoria abaixo para começar suas compras!",
+      color: 0x3b82f6,
       fields: [
         {
-          name: "Produtos Disponíveis",
-          value: `Total: ${products.length} produtos`,
-          inline: false,
+          name: "📦 Produtos Disponíveis",
+          value: `${products.length} produtos para você escolher`,
+          inline: true,
+        },
+        {
+          name: "🏷️ Categorias",
+          value: `${categories.length} categorias diferentes`,
+          inline: true,
+        },
+        {
+          name: "💳 Pagamento Seguro",
+          value: "PIX e Cartão de Crédito disponíveis",
+          inline: true,
         },
       ],
+      footer: {
+        text: "Clique no select menu abaixo para explorar categorias",
+      },
     };
 
     const components = [
@@ -450,22 +463,30 @@ async function handleCategorySelect(
     }
 
     const embeds = products.map((product) => ({
-      title: product.name,
-      description: product.description || "Sem descrição",
-      color: 0x5865f2,
+      title: `📦 ${product.name}`,
+      description: product.description || "Produto sem descrição",
+      color: 0x10b981,
       fields: [
         {
-          name: "Preço",
-          value: `R$ ${product.price}`,
+          name: "💵 Preço",
+          value: `**R$ ${product.price}**`,
           inline: true,
         },
         {
-          name: "Estoque",
-          value: `${product.stock} unidades`,
+          name: "📋 Estoque",
+          value: `${product.stock > 0 ? "✅" : "❌"} ${product.stock} unidades`,
+          inline: true,
+        },
+        {
+          name: "⭐ Avaliação",
+          value: "5.0 (100% recomendado)",
           inline: true,
         },
       ],
-      image: product.imageUrl ? { url: product.imageUrl } : undefined,
+      thumbnail: product.imageUrl ? { url: product.imageUrl } : undefined,
+      footer: {
+        text: `ID: ${product.id} | Clique no botão para adicionar ao carrinho`,
+      },
     }));
 
     const components = [
