@@ -30,7 +30,7 @@ export async function registerDiscordWebhookRoutes(app: FastifyInstance) {
         const timestamp = request.headers["x-signature-timestamp"] as string;
         const rawBody = (request as any).rawBody || JSON.stringify(request.body);
 
-        if (discordPublicKey && !webhookService.verifySignature(rawBody, signature, timestamp)) {
+        if (!discordPublicKey || !webhookService.verifySignature(rawBody, signature, timestamp)) {
           return reply.status(401).send({ error: "Invalid signature" });
         }
 
