@@ -8,12 +8,14 @@ import ProductsTab from "@/pages/admin/ProductsTab";
 import CategoriesTab from "@/pages/admin/CategoriesTab";
 import OrdersTab from "@/pages/admin/OrdersTab";
 import SettingsTab from "@/pages/admin/SettingsTab";
+import ChannelsTab from "@/pages/admin/ChannelsTab";
 import {
   BarChart3,
   ShoppingCart,
   Package,
   Settings,
   LayoutDashboard,
+  MessageCircle,
 } from "lucide-react";
 
 export default function Admin() {
@@ -64,7 +66,7 @@ export default function Admin() {
 
         {/* Tabs com ícones */}
         <Tabs defaultValue="dashboard" className="w-full">
-          <TabsList className="grid w-full grid-cols-5 bg-slate-100 p-1 rounded-lg">
+          <TabsList className="grid w-full grid-cols-6 bg-slate-100 p-1 rounded-lg">
             <TabsTrigger
               value="dashboard"
               className="flex items-center gap-2 rounded-md"
@@ -94,6 +96,13 @@ export default function Admin() {
               <span className="hidden sm:inline">Pedidos</span>
             </TabsTrigger>
             <TabsTrigger
+              value="channels"
+              className="flex items-center gap-2 rounded-md"
+            >
+              <MessageCircle className="w-4 h-4" />
+              <span className="hidden sm:inline">Canais</span>
+            </TabsTrigger>
+            <TabsTrigger
               value="settings"
               className="flex items-center gap-2 rounded-md"
             >
@@ -118,6 +127,10 @@ export default function Admin() {
 
             <TabsContent value="orders" className="p-6 space-y-4">
               <OrdersTab />
+            </TabsContent>
+
+            <TabsContent value="channels" className="p-6 space-y-4">
+              <ChannelsTab />
             </TabsContent>
 
             <TabsContent value="settings" className="p-6 space-y-4">
