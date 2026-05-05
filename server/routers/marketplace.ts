@@ -6,12 +6,14 @@ import { CategoryService } from "../domain/services/CategoryService";
 import { CartService } from "../domain/services/CartService";
 import { OrderService } from "../domain/services/OrderService";
 import { PaymentService } from "../domain/services/PaymentService";
+import { ChannelPostingService } from "../infrastructure/discord/ChannelPostingService";
 
 const productService = container.resolve(ProductService);
 const categoryService = container.resolve(CategoryService);
 const cartService = container.resolve(CartService);
 const orderService = container.resolve(OrderService);
 const paymentService = container.resolve(PaymentService);
+const channelPostingService = new ChannelPostingService();
 
 export const marketplaceRouter = router({
   // Products
@@ -301,6 +303,140 @@ export const marketplaceRouter = router({
       .query(async ({ input }) => {
         const isVerified = await paymentService.verifyPaymentStatus(input);
         return { verified: isVerified };
+      }),
+  }),
+
+  channels: router({
+    postProductShowcase: protectedProcedure
+      .input(
+        z.object({
+          guildId: z.string(),
+          showcaseChannelId: z.string(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        if (ctx.user?.role !== "admin") {
+          throw new Error("Unauthorized");
+        }
+
+        const products = await productService.getActiveProducts();
+        await channelPostingService.postProductShowcase({
+          guildId: input.guildId,
+          showcaseChannelId: input.showcaseChannelId,
+          products: products.map((p) => ({
+            id: p.id,
+            name: p.name,
+            description: p.description || undefined,
+            price: parseFloat(p.price),
+            imageUrl: p.imageUrl || undefined,
+            stock: p.stock,
+            categoryId: p.categoryId,
+          } as any)),
+        });
+
+        return { success: true };
+      }),
+
+    postAnnouncement: protectedProcedure
+      .input(
+        z.object({
+          guildId: z.string(),
+          announcementChannelId: z.string(),
+          title: z.string(),
+          description: z.string(),
+          imageUrl: z.string().optional(),
+          color: z.number().optional(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        if (ctx.user?.role !== "admin") {
+          throw new Error("Unauthorized");
+        }
+
+        await channelPostingService.postAnnouncement({
+          guildId: input.guildId,
+          announcementChannelId: input.announcementChannelId,
+          title: input.title,
+          description: input.description,
+          imageUrl: input.imageUrl,
+          color: input.color,
+        });
+
+        return { success: true };
+      }),
+
+    postPromotion: protectedProcedure
+      .input(
+        z.object({
+          guildId: z.string(),
+          promotionChannelId: z.string(),
+          title: z.string(),
+          discount: z.number(),
+          productIds: z.array(z.number()),
+          endDate: z.string(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        if (ctx.user?.role !== "admin") {
+          throw new Error("Unauthorized");
+        }
+
+        const products = await Promise.all(
+          input.productIds.map((id) => productService.getProductById(id))
+        );
+
+        const promotionProducts = products
+          .filter((p) => p !== null)
+          .map((p) => ({
+            id: p!.id,
+            name: p!.name,
+            originalPrice: parseFloat(p!.price),
+            discountedPrice: parseFloat(p!.price) * (1 - input.discount / 100),
+          } as any));
+
+        await channelPostingService.postPromotion({
+          guildId: input.guildId,
+          promotionChannelId: input.promotionChannelId,
+          title: input.title,
+          discount: input.discount,
+          products: promotionProducts,
+          endDate: input.endDate,
+        });
+
+        return { success: true };
+      }),
+
+    postNewProduct: protectedProcedure
+      .input(
+        z.object({
+          guildId: z.string(),
+          announcementChannelId: z.string(),
+          productId: z.number(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        if (ctx.user?.role !== "admin") {
+          throw new Error("Unauthorized");
+        }
+
+        const product = await productService.getProductById(input.productId);
+        if (!product) {
+          throw new Error("Product not found");
+        }
+
+        await channelPostingService.postNewProduct({
+          guildId: input.guildId,
+          announcementChannelId: input.announcementChannelId,
+          product: {
+            id: product.id,
+            name: product.name,
+            description: product.description || undefined,
+            price: parseFloat(product.price),
+            imageUrl: product.imageUrl || undefined,
+          },
+        });
+
+        return { success: true };
       }),
   }),
 });
