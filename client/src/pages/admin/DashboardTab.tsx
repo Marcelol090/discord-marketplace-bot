@@ -4,6 +4,7 @@ import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, L
 import { trpc } from "@/lib/trpc";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, TrendingUp, ShoppingCart, DollarSign, Package } from "lucide-react";
+import ClickAnalyticsWidget from "./ClickAnalyticsWidget";
 
 interface SalesData {
   date: string;
@@ -302,6 +303,12 @@ export default function DashboardTab() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Análise de Cliques */}
+      <div className="border-t pt-6">
+        <h2 className="text-2xl font-bold mb-4">Análise de Engajamento</h2>
+        <ClickAnalyticsWidget />
+      </div>
 
       {/* Notificações de PIX Pendentes */}
       <Card className="border-yellow-200 bg-yellow-50">
