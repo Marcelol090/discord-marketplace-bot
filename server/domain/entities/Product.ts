@@ -12,7 +12,9 @@ export class Product {
     public imageUrl: string | null,
     public isActive: boolean,
     public createdAt: Date,
-    public updatedAt: Date
+    public updatedAt: Date,
+    public isDigital: boolean = false,
+    public assetKey: string | null = null
   ) {}
 
   static create(data: {
@@ -23,6 +25,8 @@ export class Product {
     stock?: number;
     imageUrl?: string | null;
     isActive?: boolean;
+    isDigital?: boolean;
+    assetKey?: string | null;
   }): Product {
     return new Product(
       0,
@@ -34,7 +38,9 @@ export class Product {
       data.imageUrl || null,
       data.isActive !== false,
       new Date(),
-      new Date()
+      new Date(),
+      data.isDigital || false,
+      data.assetKey || null
     );
   }
 

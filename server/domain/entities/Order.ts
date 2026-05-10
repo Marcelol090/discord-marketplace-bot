@@ -9,6 +9,7 @@ export type OrderStatus =
   | "delivered"
   | "cancelled";
 export type PaymentMethod = "pix" | "credit_card";
+export type DeliveryStatus = "pending" | "sent" | "failed";
 
 export interface ShippingAddress {
   street: string;
@@ -33,7 +34,10 @@ export class Order {
     public shippingAddress: ShippingAddress | null,
     public notes: string | null,
     public createdAt: Date,
-    public updatedAt: Date
+    public updatedAt: Date,
+    public deliveryStatus: DeliveryStatus = "pending",
+    public deliveryAttempts: number = 0,
+    public lastDeliveryAttempt: Date | null = null
   ) {}
 
   static create(data: {
@@ -56,8 +60,30 @@ export class Order {
       data.shippingAddress || null,
       data.notes || null,
       new Date(),
-      new Date()
+      new Date(),
+      "pending",
+      0,
+      null
     );
+  }
+
+  markDeliveryAsSent(): void {
+    this.deliveryStatus = "sent";
+    this.deliveryAttempts += 1;
+    this.lastDeliveryAttempt = new Date();
+    this.updatedAt = new Date();
+  }
+
+  markDeliveryAsFailed(): void {
+    this.deliveryStatus = "failed";
+    this.deliveryAttempts += 1;
+    this.lastDeliveryAttempt = new Date();
+    this.updatedAt = new Date();
+  }
+
+  resetDeliveryStatus(): void {
+    this.deliveryStatus = "pending";
+    this.updatedAt = new Date();
   }
 
   markAsPaid(paymentId: string): void {

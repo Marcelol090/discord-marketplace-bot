@@ -3,10 +3,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useEffect } from "react";
 import { useLocation } from "wouter";
-import DashboardTab from "@/pages/admin/DashboardTab";
-import ProductsTab from "@/pages/admin/ProductsTab";
+import { AdminDashboard } from "@/pages/admin/AdminDashboard";
+import { ProductsManagement } from "@/pages/admin/ProductsManagement";
+import { OrdersManagement } from "@/pages/admin/OrdersManagement";
 import CategoriesTab from "@/pages/admin/CategoriesTab";
-import OrdersTab from "@/pages/admin/OrdersTab";
 import SettingsTab from "@/pages/admin/SettingsTab";
 import ChannelsTab from "@/pages/admin/ChannelsTab";
 import {
@@ -114,11 +114,11 @@ export default function Admin() {
           {/* Tab Contents */}
           <div className="mt-6 bg-white rounded-lg shadow-sm border border-slate-200">
             <TabsContent value="dashboard" className="p-6 space-y-4">
-              <DashboardTab />
+              <AdminDashboard />
             </TabsContent>
 
             <TabsContent value="products" className="p-6 space-y-4">
-              <ProductsTab />
+              <ProductsManagement />
             </TabsContent>
 
             <TabsContent value="categories" className="p-6 space-y-4">
@@ -126,7 +126,7 @@ export default function Admin() {
             </TabsContent>
 
             <TabsContent value="orders" className="p-6 space-y-4">
-              <OrdersTab />
+              <OrdersManagement />
             </TabsContent>
 
             <TabsContent value="channels" className="p-6 space-y-4">
