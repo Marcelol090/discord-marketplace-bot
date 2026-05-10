@@ -95,3 +95,95 @@
 - **Autenticação**: Manus OAuth + Discord roles
 - **Pagamentos**: PIX + Stripe (cartão de crédito)
 - **Notificações**: Discord embeds automáticas para pedidos e pagamentos
+
+## Fase 14: Integração de Webhooks Reais do Discord
+- [ ] Registrar slash commands no servidor Boreas (guild-specific)
+- [ ] Validar endpoint de webhook do Discord está acessível
+- [ ] Testar interações reais: /shop, /comprar, /cart, /checkout
+- [ ] Implementar handlers de botões e select menus
+- [ ] Testar fluxo completo com usuários reais
+
+## Fase 15: Entrega Automática de Arquivos
+- [ ] Adicionar coluna de asset key na tabela products
+- [ ] Criar serviço de entrega automática (DigitalDeliveryService)
+- [ ] Implementar envio de DM após pagamento confirmado
+- [ ] Enviar arquivo .otbm via Discord
+- [ ] Rastrear status de entrega no banco de dados
+
+## Fase 16: Painel de Admin em Tempo Real
+- [ ] Implementar queries tRPC para métricas em tempo real
+- [ ] Wiring DashboardTab com dados reais (vendas, pedidos, receita)
+- [ ] Implementar OrdersTab com CRUD real
+- [ ] Implementar ProductsTab com gerenciamento de estoque/preço
+- [ ] Adicionar polling/WebSocket para atualizações em tempo real
+
+
+## Fase 14-16: Webhooks, Entrega Digital e Admin Dashboard (Ciclo 3)
+
+### Fase 14: Integração de Webhooks Reais do Discord ✅
+- [x] Atualizar schema para suportar entrega digital (assetKey, isDigital, deliveryStatus)
+- [x] Criar DigitalDeliveryService para enviar arquivos via DM
+- [x] Implementar webhook handler de pagamento (Stripe + PIX)
+- [x] Integrar triggerDigitalDelivery no fluxo de pagamento
+- [x] Criar testes para DigitalDeliveryService
+- [x] Corrigir testes do fluxo da loja (14/14 testes passando)
+
+### Fase 15: Entrega Automática de Arquivos ✅
+- [x] Adicionar colunas na tabela products (assetKey, isDigital)
+- [x] Adicionar colunas na tabela orders (deliveryStatus, deliveryAttempts, lastDeliveryAttempt)
+- [x] Criar DigitalDeliveryService com métodos:
+  - [x] deliverDigitalAsset - envio individual
+  - [x] deliverMultipleAssets - múltiplos itens
+  - [x] notifyOrderConfirmed - confirmação de pagamento
+  - [x] createDMChannel - criar canal DM
+- [x] Implementar retry logic com tentativas rastreadas
+- [x] Integrar com payment-webhook.ts (Stripe + PIX)
+- [x] Criar testes unitários (9/9 testes passando)
+
+### Fase 16: Painel de Admin em Tempo Real ✅
+- [x] Criar router de admin com 10 procedures:
+  - [x] getDashboardMetrics - métricas em tempo real
+  - [x] getOrders - pedidos com paginação e filtros
+  - [x] getOrderDetails - detalhes completos
+  - [x] updateOrderStatus - atualizar status
+  - [x] retryDigitalDelivery - retentar entrega
+  - [x] getProducts - produtos com filtros
+  - [x] updateProductStock - atualizar estoque
+  - [x] updateProductPrice - atualizar preço
+  - [x] toggleProductActive - ativar/desativar
+  - [x] getSalesAnalytics - análise de vendas
+- [x] Criar AdminDashboard.tsx com:
+  - [x] 4 métricas principais em tempo real
+  - [x] Gráfico de vendas (30 dias)
+  - [x] Top 10 produtos
+  - [x] Status de entrega digital
+  - [x] Auto-refresh a cada 30 segundos
+- [x] Criar OrdersManagement.tsx com:
+  - [x] Lista paginada de pedidos
+  - [x] Filtros por status, entrega e pagamento
+  - [x] Modal de detalhes com itens
+  - [x] Atualização de status inline
+  - [x] Retry de entrega digital
+- [x] Criar ProductsManagement.tsx com:
+  - [x] Lista paginada de produtos
+  - [x] Filtros por tipo e status
+  - [x] Modal de edição de preço/estoque
+  - [x] Toggle de status ativo/inativo
+  - [x] Visualização de arquivo digital
+- [x] Integrar adminRouter ao appRouter
+
+### Resumo Ciclo 3:
+- **Novos Testes**: 23 testes (14 shop-flow + 9 digital-delivery)
+- **Novas Tabelas**: 2 tabelas (clickAnalytics, embedVariants)
+- **Novas Colunas**: 5 colunas para entrega digital
+- **Novos Procedures tRPC**: 10 procedures de admin
+- **Novos Componentes React**: 3 componentes (AdminDashboard, OrdersManagement, ProductsManagement)
+- **Novos Serviços**: DigitalDeliveryService com 4 métodos
+- **Webhook Integration**: Stripe + PIX com auto-delivery
+
+### Próximas Fases:
+- [ ] Testar fluxo completo de pagamento com entrega digital
+- [ ] Validar dashboard em produção
+- [ ] Implementar WebSocket para atualizações em tempo real
+- [ ] Adicionar notificações push
+- [ ] Melhorar performance de queries

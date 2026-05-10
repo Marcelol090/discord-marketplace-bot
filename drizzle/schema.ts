@@ -62,6 +62,9 @@ export const products = mysqlTable(
     stock: int("stock").default(0).notNull(),
     imageUrl: text("imageUrl"),
     isActive: boolean("isActive").default(true).notNull(),
+    // Digital asset support
+    assetKey: varchar("assetKey", { length: 255 }), // S3 storage key for .otbm files
+    isDigital: boolean("isDigital").default(false).notNull(), // Whether this is a digital product
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
@@ -132,6 +135,10 @@ export const orders = mysqlTable(
     trackingNumber: varchar("trackingNumber", { length: 255 }),
     shippingAddress: json("shippingAddress"),
     notes: text("notes"),
+    // Digital delivery tracking
+    deliveryStatus: mysqlEnum("deliveryStatus", ["pending", "sent", "failed"]).default("pending").notNull(),
+    deliveryAttempts: int("deliveryAttempts").default(0).notNull(),
+    lastDeliveryAttempt: timestamp("lastDeliveryAttempt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
@@ -139,6 +146,7 @@ export const orders = mysqlTable(
     userIdIdx: index("orders_userId_idx").on(table.userId),
     discordUserIdIdx: index("orders_discordUserId_idx").on(table.discordUserId),
     statusIdx: index("orders_status_idx").on(table.status),
+    deliveryStatusIdx: index("orders_deliveryStatus_idx").on(table.deliveryStatus),
     userFk: foreignKey({
       columns: [table.userId],
       foreignColumns: [users.id],
@@ -194,6 +202,10 @@ export const botConfigs = mysqlTable(
     pixKey: text("pixKey"),
     stripePublishableKey: text("stripePublishableKey"),
     stripeSecretKey: text("stripeSecretKey"),
+    // Channel IDs for Boreas server
+    showcaseChannelId: varchar("showcaseChannelId", { length: 64 }),
+    announcementChannelId: varchar("announcementChannelId", { length: 64 }),
+    promotionChannelId: varchar("promotionChannelId", { length: 64 }),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
@@ -213,11 +225,9 @@ export const paymentTransactions = mysqlTable(
   {
     id: int("id").autoincrement().primaryKey(),
     orderId: int("orderId").notNull(),
-    externalId: varchar("externalId", { length: 255 }).notNull().unique(),
-    provider: mysqlEnum("provider", ["stripe", "mercadopago"]).notNull(),
-    status: mysqlEnum("status", ["pending", "completed", "failed", "refunded"])
-      .default("pending")
-      .notNull(),
+    provider: mysqlEnum("provider", ["stripe", "pix"]).notNull(),
+    externalId: varchar("externalId", { length: 255 }).notNull(),
+    status: mysqlEnum("status", ["pending", "succeeded", "failed", "cancelled"]).notNull(),
     amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
     metadata: json("metadata"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -225,9 +235,7 @@ export const paymentTransactions = mysqlTable(
   },
   (table) => ({
     orderIdIdx: index("paymentTransactions_orderId_idx").on(table.orderId),
-    externalIdIdx: index("paymentTransactions_externalId_idx").on(
-      table.externalId
-    ),
+    externalIdIdx: index("paymentTransactions_externalId_idx").on(table.externalId),
     orderFk: foreignKey({
       columns: [table.orderId],
       foreignColumns: [orders.id],
@@ -239,66 +247,50 @@ export type PaymentTransaction = typeof paymentTransactions.$inferSelect;
 export type InsertPaymentTransaction = typeof paymentTransactions.$inferInsert;
 
 /**
- * Relations
+ * Click analytics for products
  */
-export const productsRelations = relations(products, ({ one, many }) => ({
-  category: one(categories, {
-    fields: [products.categoryId],
-    references: [categories.id],
-  }),
-  cartItems: many(cartItems),
-  orderItems: many(orderItems),
-}));
-
-export const categoriesRelations = relations(categories, ({ many }) => ({
-  products: many(products),
-}));
-
-export const usersRelations = relations(users, ({ many }) => ({
-  cartItems: many(cartItems),
-  orders: many(orders),
-}));
-
-export const cartItemsRelations = relations(cartItems, ({ one }) => ({
-  user: one(users, {
-    fields: [cartItems.userId],
-    references: [users.id],
-  }),
-  product: one(products, {
-    fields: [cartItems.productId],
-    references: [products.id],
-  }),
-}));
-
-export const ordersRelations = relations(orders, ({ one, many }) => ({
-  user: one(users, {
-    fields: [orders.userId],
-    references: [users.id],
-  }),
-  items: many(orderItems),
-  paymentTransaction: one(paymentTransactions, {
-    fields: [orders.id],
-    references: [paymentTransactions.orderId],
-  }),
-}));
-
-export const orderItemsRelations = relations(orderItems, ({ one }) => ({
-  order: one(orders, {
-    fields: [orderItems.orderId],
-    references: [orders.id],
-  }),
-  product: one(products, {
-    fields: [orderItems.productId],
-    references: [products.id],
-  }),
-}));
-
-export const paymentTransactionsRelations = relations(
-  paymentTransactions,
-  ({ one }) => ({
-    order: one(orders, {
-      fields: [paymentTransactions.orderId],
-      references: [orders.id],
+export const clickAnalytics = mysqlTable(
+  "clickAnalytics",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    productId: int("productId").notNull(),
+    userId: varchar("userId", { length: 64 }),
+    action: varchar("action", { length: 64 }).notNull(), // "view", "add_to_cart", "checkout"
+    timestamp: timestamp("timestamp").defaultNow().notNull(),
+  },
+  (table) => ({
+    productIdIdx: index("clickAnalytics_productId_idx").on(table.productId),
+    userIdIdx: index("clickAnalytics_userId_idx").on(table.userId),
+    productFk: foreignKey({
+      columns: [table.productId],
+      foreignColumns: [products.id],
     }),
   })
 );
+
+export type ClickAnalytic = typeof clickAnalytics.$inferSelect;
+export type InsertClickAnalytic = typeof clickAnalytics.$inferInsert;
+
+/**
+ * A/B testing variants for embeds
+ */
+export const embedVariants = mysqlTable(
+  "embedVariants",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    testId: varchar("testId", { length: 255 }).notNull(),
+    variantName: varchar("variantName", { length: 255 }).notNull(),
+    embedData: json("embedData").notNull(),
+    clicks: int("clicks").default(0).notNull(),
+    conversions: int("conversions").default(0).notNull(),
+    status: mysqlEnum("status", ["active", "inactive"]).default("active").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    testIdIdx: index("embedVariants_testId_idx").on(table.testId),
+  })
+);
+
+export type EmbedVariant = typeof embedVariants.$inferSelect;
+export type InsertEmbedVariant = typeof embedVariants.$inferInsert;
