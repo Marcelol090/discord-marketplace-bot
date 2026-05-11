@@ -2,7 +2,6 @@ import { Router, Request, Response } from "express";
 import Stripe from "stripe";
 import { container } from "../di/container";
 import { OrderService } from "../../domain/services/OrderService";
-import { PaymentService } from "../../domain/services/PaymentService";
 import { DigitalDeliveryService } from "../discord/DigitalDeliveryService";
 import { ENV } from "../../_core/env";
 import { getDb } from "../../db";
@@ -10,9 +9,11 @@ import { orders, orderItems, products } from "../../../drizzle/schema";
 import { eq } from "drizzle-orm";
 
 const router = Router();
-const orderService = container.resolve(OrderService);
-const paymentService = container.resolve(PaymentService);
 const digitalDeliveryService = new DigitalDeliveryService();
+
+function getOrderService() {
+  return container.resolve(OrderService);
+}
 
 // Webhook secret do Stripe (deve ser configurado como variável de ambiente)
 const stripeWebhookSecret = ENV.stripeWebhookSecret;
@@ -24,6 +25,7 @@ const stripeWebhookSecret = ENV.stripeWebhookSecret;
 router.post("/stripe-webhook", async (req: Request, res: Response) => {
   try {
     const signature = req.headers["stripe-signature"] as string;
+    const orderService = getOrderService();
 
     if (!stripeWebhookSecret) {
       console.warn("STRIPE_WEBHOOK_SECRET not configured");
@@ -101,6 +103,7 @@ router.post("/stripe-webhook", async (req: Request, res: Response) => {
 router.post("/pix-webhook", async (req: Request, res: Response) => {
   try {
     const { orderId, pixKey } = req.body;
+    const orderService = getOrderService();
 
     if (!orderId) {
       return res.status(400).json({ error: "Missing orderId" });
@@ -131,6 +134,7 @@ router.post("/pix-webhook", async (req: Request, res: Response) => {
 router.post("/manual-confirm", async (req: Request, res: Response) => {
   try {
     const { orderId, pixKey } = req.body;
+    const orderService = getOrderService();
 
     if (!orderId) {
       return res.status(400).json({ error: "Missing orderId" });

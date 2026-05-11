@@ -1,6 +1,7 @@
 import axios from "axios";
 import { ENV } from "../../_core/env";
 import pino from "pino";
+import { buildEmbed } from "./discordMessageBuilders";
 
 const logger = pino();
 
@@ -95,32 +96,20 @@ export class ChannelPostingService {
         return;
       }
 
-      const embeds = options.products.map((product) => ({
-        title: `📦 ${product.name}`,
-        description: product.description || "Produto sem descrição",
-        color: 0x10b981,
-        fields: [
-          {
-            name: "💵 Preço",
-            value: `**R$ ${product.price.toFixed(2)}**`,
-            inline: true,
-          },
-          {
-            name: "📋 Estoque",
-            value: `${product.stock > 0 ? "✅" : "❌"} ${product.stock} unidades`,
-            inline: true,
-          },
-          {
-            name: "🏷️ Categoria",
-            value: `ID: ${product.categoryId}`,
-            inline: true,
-          },
-        ],
-        thumbnail: product.imageUrl ? { url: product.imageUrl } : undefined,
-        footer: {
-          text: `ID: ${product.id} | Clique em /shop para comprar`,
-        },
-      }));
+      const embeds = options.products.map((product) => {
+        return buildEmbed({
+          title: `📦 ${product.name}`,
+          description: product.description || "Produto sem descrição",
+          color: 0x10b981,
+          fields: [
+            { name: "💵 Preço", value: `**R$ ${product.price.toFixed(2)}**`, inline: true },
+            { name: "📋 Estoque", value: `${product.stock > 0 ? "✅" : "❌"} ${product.stock} unidades`, inline: true },
+            { name: "🏷️ Categoria", value: `ID: ${product.categoryId}`, inline: true },
+          ],
+          footer: `ID: ${product.id} | Clique em /shop para comprar`,
+          thumbnailUrl: product.imageUrl || undefined,
+        }).toJSON();
+      });
 
       await this.postToChannel({
         guildId: options.guildId,
@@ -146,20 +135,18 @@ export class ChannelPostingService {
         return;
       }
 
-      const embed = {
+      const embed = buildEmbed({
         title: options.title,
         description: options.description,
         color: options.color || 0x3b82f6,
-        image: options.imageUrl ? { url: options.imageUrl } : undefined,
-        footer: {
-          text: "Clique em /shop para explorar nossos produtos",
-        },
-      };
+        footer: "Clique em /shop para explorar nossos produtos",
+        imageUrl: options.imageUrl || undefined,
+      });
 
       await this.postToChannel({
         guildId: options.guildId,
         channelId: options.announcementChannelId,
-        embeds: [embed],
+        embeds: [embed.toJSON()],
         content: "📢 **Novo Anúncio!**",
       });
 
@@ -187,31 +174,21 @@ export class ChannelPostingService {
         )
         .join("\n");
 
-      const embed = {
+      const embed = buildEmbed({
         title: `🎉 ${options.title}`,
         description: `**Desconto de ${options.discount}%!**\n\n${productsList}`,
         color: 0xf59e0b,
         fields: [
-          {
-            name: "⏰ Válido até",
-            value: new Date(options.endDate).toLocaleDateString("pt-BR"),
-            inline: true,
-          },
-          {
-            name: "🛒 Comprar",
-            value: "Use `/shop` para ver todos os produtos",
-            inline: true,
-          },
+          { name: "⏰ Válido até", value: new Date(options.endDate).toLocaleDateString("pt-BR"), inline: true },
+          { name: "🛒 Comprar", value: "Use `/shop` para ver todos os produtos", inline: true },
         ],
-        footer: {
-          text: "Aproveite essa promoção especial!",
-        },
-      };
+        footer: "Aproveite essa promoção especial!",
+      });
 
       await this.postToChannel({
         guildId: options.guildId,
         channelId: options.promotionChannelId,
-        embeds: [embed],
+        embeds: [embed.toJSON()],
         content: "🎊 **PROMOÇÃO ESPECIAL!**",
       });
 
@@ -242,34 +219,22 @@ export class ChannelPostingService {
         return;
       }
 
-      const embed = {
+      const embed = buildEmbed({
         title: `✨ Novo Produto: ${options.product.name}`,
         description: options.product.description || "Produto novo no catálogo!",
         color: 0x8b5cf6,
         fields: [
-          {
-            name: "💵 Preço",
-            value: `**R$ ${options.product.price.toFixed(2)}**`,
-            inline: true,
-          },
-          {
-            name: "🆔 ID",
-            value: `${options.product.id}`,
-            inline: true,
-          },
+          { name: "💵 Preço", value: `**R$ ${options.product.price.toFixed(2)}**`, inline: true },
+          { name: "🆔 ID", value: `${options.product.id}`, inline: true },
         ],
-        thumbnail: options.product.imageUrl
-          ? { url: options.product.imageUrl }
-          : undefined,
-        footer: {
-          text: "Use /shop para comprar este produto",
-        },
-      };
+        footer: "Use /shop para comprar este produto",
+        thumbnailUrl: options.product.imageUrl || undefined,
+      });
 
       await this.postToChannel({
         guildId: options.guildId,
         channelId: options.announcementChannelId,
-        embeds: [embed],
+        embeds: [embed.toJSON()],
         content: "🎁 **Novo Produto Adicionado!**",
       });
 

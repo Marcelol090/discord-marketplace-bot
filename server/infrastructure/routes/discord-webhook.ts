@@ -1,4 +1,4 @@
-import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import { Router, Request, Response } from "express";
 import { DiscordWebhookService } from "../discord/DiscordWebhookService";
 import { DiscordInteraction } from "@shared/discord-types";
 import { container } from "../di/container";
@@ -7,7 +7,27 @@ import { CategoryService } from "../../domain/services/CategoryService";
 import { OrderService } from "../../domain/services/OrderService";
 import { CartService } from "../../domain/services/CartService";
 
-export async function registerDiscordWebhookRoutes(app: FastifyInstance) {
+type ReplyAdapter = {
+  status(code: number): ReplyAdapter;
+  send(payload: unknown): unknown;
+};
+
+function createReplyAdapter(response: Response): ReplyAdapter {
+  const adapter: ReplyAdapter = {
+    status(code: number) {
+      response.status(code);
+      return adapter;
+    },
+    send(payload: unknown) {
+      return response.send(payload);
+    },
+  };
+
+  return adapter;
+}
+
+export function registerDiscordWebhookRoutes(): Router {
+  const router = Router();
   const discordPublicKey = process.env.DISCORD_PUBLIC_KEY;
   if (!discordPublicKey) {
     console.warn("DISCORD_PUBLIC_KEY not set, webhook verification disabled");
@@ -15,20 +35,23 @@ export async function registerDiscordWebhookRoutes(app: FastifyInstance) {
 
   const webhookService = new DiscordWebhookService(discordPublicKey || "");
 
-  // Get services from DI container
-  const productService = container.resolve(ProductService);
-  const categoryService = container.resolve(CategoryService);
-  const orderService = container.resolve(OrderService);
-  const cartService = container.resolve(CartService);
+  const getServices = () => ({
+    productService: container.resolve(ProductService),
+    categoryService: container.resolve(CategoryService),
+    orderService: container.resolve(OrderService),
+    cartService: container.resolve(CartService),
+  });
 
-  app.post<{ Body: string }>(
-    "/api/discord/webhook",
-    async (request: FastifyRequest<{ Body: string }>, reply: FastifyReply) => {
+  router.post("/", async (request: Request, response: Response) => {
+      const reply = createReplyAdapter(response);
+      const { productService, categoryService, orderService, cartService } = getServices();
       try {
         // Verify signature
         const signature = request.headers["x-signature-ed25519"] as string;
         const timestamp = request.headers["x-signature-timestamp"] as string;
-        const rawBody = (request as any).rawBody || JSON.stringify(request.body);
+        const rawBody =
+          (request as any).rawBody ||
+          (typeof request.body === "string" ? request.body : JSON.stringify(request.body));
 
         if (discordPublicKey && !webhookService.verifySignature(rawBody, signature, timestamp)) {
           return reply.status(401).send({ error: "Invalid signature" });
@@ -129,20 +152,19 @@ export async function registerDiscordWebhookRoutes(app: FastifyInstance) {
           }
         }
 
-        return reply.send(
-          webhookService.createCommandResponse("Interaction not handled")
-        );
+        return reply.send(webhookService.createCommandResponse("Interaction not handled"));
       } catch (error) {
         console.error("Webhook error:", error);
         return reply.status(500).send({ error: "Internal server error" });
       }
-    }
-  );
+    });
+
+  return router;
 }
 
 async function handleShopCommand(
   interaction: DiscordInteraction,
-  reply: FastifyReply,
+  reply: ReplyAdapter,
   webhookService: DiscordWebhookService,
   productService: ProductService,
   categoryService: CategoryService
@@ -215,7 +237,7 @@ async function handleShopCommand(
 
 async function handleCartCommand(
   interaction: DiscordInteraction,
-  reply: FastifyReply,
+  reply: ReplyAdapter,
   webhookService: DiscordWebhookService,
   cartService: CartService
 ) {
@@ -265,7 +287,7 @@ async function handleCartCommand(
 
 async function handleCheckoutCommand(
   interaction: DiscordInteraction,
-  reply: FastifyReply,
+  reply: ReplyAdapter,
   webhookService: DiscordWebhookService,
   cartService: CartService,
   orderService: OrderService
@@ -319,7 +341,7 @@ async function handleCheckoutCommand(
 
 async function handleOrdersCommand(
   interaction: DiscordInteraction,
-  reply: FastifyReply,
+  reply: ReplyAdapter,
   webhookService: DiscordWebhookService,
   orderService: OrderService
 ) {
@@ -367,7 +389,7 @@ async function handleOrdersCommand(
 
 async function handleAddToCartButton(
   interaction: DiscordInteraction,
-  reply: FastifyReply,
+  reply: ReplyAdapter,
   webhookService: DiscordWebhookService,
   customId: string,
   cartService: CartService
@@ -403,7 +425,7 @@ async function handleAddToCartButton(
 
 async function handleRemoveFromCartButton(
   interaction: DiscordInteraction,
-  reply: FastifyReply,
+  reply: ReplyAdapter,
   webhookService: DiscordWebhookService,
   customId: string,
   cartService: CartService
@@ -439,7 +461,7 @@ async function handleRemoveFromCartButton(
 
 async function handleCategorySelect(
   interaction: DiscordInteraction,
-  reply: FastifyReply,
+  reply: ReplyAdapter,
   webhookService: DiscordWebhookService,
   productService: ProductService
 ) {
@@ -518,4 +540,6 @@ async function handleCategorySelect(
   }
 }
 
-export default registerDiscordWebhookRoutes;
+const discordWebhookRouter = registerDiscordWebhookRoutes();
+
+export default discordWebhookRouter;

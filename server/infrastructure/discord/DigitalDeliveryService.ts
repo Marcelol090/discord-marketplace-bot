@@ -1,6 +1,8 @@
 import axios from "axios";
+import { ButtonStyle } from "discord.js";
 import { ENV } from "../../_core/env";
 import { storagePut, storageGet } from "../../storage";
+import { buildButtonRow, buildEmbed } from "./discordMessageBuilders";
 
 /**
  * Serviço de entrega automática de arquivos digitais via Discord DM
@@ -40,55 +42,29 @@ export class DigitalDeliveryService {
       }
 
       // Enviar mensagem com link de download
-      const embed = {
+      const embed = buildEmbed({
         title: "🎉 Seu Produto Está Pronto!",
         description: `Obrigado pela compra! Seu arquivo foi processado com sucesso.`,
         color: 0x10b981,
         fields: [
-          {
-            name: "📦 Produto",
-            value: productName,
-            inline: false,
-          },
-          {
-            name: "📋 Pedido ID",
-            value: `\`${orderId}\``,
-            inline: true,
-          },
-          {
-            name: "⏱️ Data",
-            value: new Date().toLocaleString("pt-BR"),
-            inline: true,
-          },
-          {
-            name: "📥 Download",
-            value: `[Clique aqui para baixar](${assetUrl})`,
-            inline: false,
-          },
+          { name: "📦 Produto", value: productName, inline: false },
+          { name: "📋 Pedido ID", value: `\`${orderId}\``, inline: true },
+          { name: "⏱️ Data", value: new Date().toLocaleString("pt-BR"), inline: true },
+          { name: "📥 Download", value: `[Clique aqui para baixar](${assetUrl})`, inline: false },
         ],
-        footer: {
-          text: "Arquivo disponível por 7 dias",
-        },
-      };
+        footer: "Arquivo disponível por 7 dias",
+      });
+
+      const row = buildButtonRow([
+        { style: ButtonStyle.Link, label: "📥 Baixar Arquivo", url: assetUrl },
+      ]);
 
       // Enviar embed com botão de download
       await axios.post(
         `${this.discordApiUrl}/channels/${dmChannelId}/messages`,
         {
-          embeds: [embed],
-          components: [
-            {
-              type: 1, // ACTION_ROW
-              components: [
-                {
-                  type: 2, // BUTTON
-                  style: 5, // LINK
-                  label: "📥 Baixar Arquivo",
-                  url: assetUrl,
-                },
-              ],
-            },
-          ],
+          embeds: [embed.toJSON()],
+          components: [row.toJSON()],
         },
         {
           headers: {
@@ -151,50 +127,30 @@ export class DigitalDeliveryService {
       }
 
       // Criar embed com todos os downloads
-      const embed = {
+      const embed = buildEmbed({
         title: "🎉 Seus Produtos Estão Prontos!",
         description: `Obrigado pela compra! Seus arquivos foram processados com sucesso.`,
         color: 0x10b981,
         fields: [
-          {
-            name: "📦 Itens",
-            value: validLinks.map((link) => `• ${link.name}`).join("\n"),
-            inline: false,
-          },
-          {
-            name: "📋 Pedido ID",
-            value: `\`${orderId}\``,
-            inline: true,
-          },
-          {
-            name: "⏱️ Data",
-            value: new Date().toLocaleString("pt-BR"),
-            inline: true,
-          },
+          { name: "📦 Itens", value: validLinks.map((link) => `• ${link.name}`).join("\n"), inline: false },
+          { name: "📋 Pedido ID", value: `\`${orderId}\``, inline: true },
+          { name: "⏱️ Data", value: new Date().toLocaleString("pt-BR"), inline: true },
         ],
-        footer: {
-          text: "Arquivos disponíveis por 7 dias",
-        },
-      };
+        footer: "Arquivos disponíveis por 7 dias",
+      });
 
       // Criar componentes com botões de download
-      const components = validLinks.map((link) => ({
-        type: 1, // ACTION_ROW
-        components: [
-          {
-            type: 2, // BUTTON
-            style: 5, // LINK
-            label: `📥 ${link.name}`,
-            url: link.url,
-          },
-        ],
-      }));
+      const components = validLinks.map((link) => {
+        return buildButtonRow([
+          { style: ButtonStyle.Link, label: `📥 ${link.name}`, url: link.url },
+        ]).toJSON();
+      });
 
       // Enviar mensagem
       await axios.post(
         `${this.discordApiUrl}/channels/${dmChannelId}/messages`,
         {
-          embeds: [embed],
+          embeds: [embed.toJSON()],
           components: components.slice(0, 5), // Discord limit
         },
         {
@@ -258,41 +214,23 @@ export class DigitalDeliveryService {
 
       const paymentMethodLabel = paymentMethod === "pix" ? "🔑 PIX" : "💳 Cartão de Crédito";
 
-      const embed = {
+      const embed = buildEmbed({
         title: "✅ Pedido Confirmado!",
         description: "Seu pagamento foi recebido com sucesso. Seus arquivos serão entregues em breve.",
         color: 0x10b981,
         fields: [
-          {
-            name: "📋 Pedido ID",
-            value: `\`${orderId}\``,
-            inline: true,
-          },
-          {
-            name: "💰 Valor",
-            value: `R$ ${totalAmount.toFixed(2)}`,
-            inline: true,
-          },
-          {
-            name: "💳 Método de Pagamento",
-            value: paymentMethodLabel,
-            inline: true,
-          },
-          {
-            name: "📥 Próximos Passos",
-            value: "Você receberá seus arquivos em uma mensagem separada. Verifique suas DMs!",
-            inline: false,
-          },
+          { name: "📋 Pedido ID", value: `\`${orderId}\``, inline: true },
+          { name: "💰 Valor", value: `R$ ${totalAmount.toFixed(2)}`, inline: true },
+          { name: "💳 Método de Pagamento", value: paymentMethodLabel, inline: true },
+          { name: "📥 Próximos Passos", value: "Você receberá seus arquivos em uma mensagem separada. Verifique suas DMs!", inline: false },
         ],
-        footer: {
-          text: "Obrigado por sua compra!",
-        },
-      };
+        footer: "Obrigado por sua compra!",
+      });
 
       await axios.post(
         `${this.discordApiUrl}/channels/${dmChannelId}/messages`,
         {
-          embeds: [embed],
+          embeds: [embed.toJSON()],
         },
         {
           headers: {

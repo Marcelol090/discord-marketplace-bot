@@ -1,124 +1,162 @@
-import { DiscordInteraction } from "@shared/discord-types";
 import { ProductService } from "../../../domain/services/ProductService";
 import { CategoryService } from "../../../domain/services/CategoryService";
-import { container } from "../../di/container";
+import { ButtonStyle } from "discord.js";
+import { i18n, getLocale } from "../../i18n";
+import { buildButtonRow, buildEmbed, buildSelectMenuRow } from "../discordMessageBuilders";
+import { createEmbedResponse, createEphemeralResponse } from "../discordInteractionResponses";
 
-const productService = container.resolve(ProductService);
-const categoryService = container.resolve(CategoryService);
+const ITEMS_PER_PAGE = 5;
 
+/**
+ * ShopCommand — Discord interaction handler for browsing products.
+ * Supports offset-based pagination and category filtering.
+ */
 export class ShopCommand {
-  static async handle(interaction: DiscordInteraction): Promise<any> {
+  constructor(
+    private productService: ProductService,
+    private categoryService: CategoryService,
+  ) {}
+
+  /**
+   * Handle /shop command with pagination.
+   * @param page - 1-indexed page number
+   */
+  async handle(page: number = 1, discordLocale?: string): Promise<any> {
+    const locale = getLocale(discordLocale);
+    const t = i18n.getFixedT(locale, "translation", "shop");
+
     try {
-      // Get all categories
-      const categories = await categoryService.getAllCategories();
+      const categories = await this.categoryService.getAllCategories();
+      const allProducts = await this.productService.getActiveProducts();
 
-      // Get featured products (first 5 active products)
-      const products = await productService.getActiveProducts();
-      const featured = products.slice(0, 5);
+      return this.buildResponse(allProducts, categories, page, undefined, locale, t);
+    } catch (error) {
+      console.error("ShopCommand.handle error:", error);
+      return createEphemeralResponse({ content: t("error") });
+    }
+  }
 
-      // Build embeds for products
-      const productEmbeds = featured.map((product: any) => ({
-        title: product.name,
+  /**
+   * Handle category-filtered browsing.
+   */
+  async handleByCategory(categoryId: number, page: number = 1, discordLocale?: string): Promise<any> {
+    const locale = getLocale(discordLocale);
+    const t = i18n.getFixedT(locale, "translation", "shop");
+
+    try {
+      const categories = await this.categoryService.getAllCategories();
+      const products = await this.productService.getProductsByCategory(categoryId);
+
+      return this.buildResponse(products, categories, page, categoryId, locale, t);
+    } catch (error) {
+      console.error("ShopCommand.handleByCategory error:", error);
+      return createEphemeralResponse({ content: t("errorProducts") });
+    }
+  }
+
+  private buildResponse(
+    allProducts: any[],
+    categories: any[],
+    page: number,
+    categoryId: number | undefined,
+    locale: string,
+    t: any
+  ): any {
+    const totalPages = Math.max(1, Math.ceil(allProducts.length / ITEMS_PER_PAGE));
+    const safePage = Math.max(1, Math.min(page, totalPages));
+    const offset = (safePage - 1) * ITEMS_PER_PAGE;
+    const pageProducts = allProducts.slice(offset, offset + ITEMS_PER_PAGE);
+
+    // Build product embeds
+    const productEmbeds = pageProducts.map((product: any) => {
+      return buildEmbed({
+        title: `📦 ${product.name}`,
         description: product.description || "Sem descrição",
         color: 0x5865f2,
         fields: [
+          { name: t("price"), value: `R$ ${product.price}`, inline: true },
           {
-            name: "Preço",
-            value: `R$ ${product.price}`,
+            name: t("stock"),
+            value: product.stock > 0 ? t("stockAvailable", { count: product.stock }) : t("stockUnavailable"),
             inline: true,
-          },
-          {
-            name: "Estoque",
-            value: product.stock > 0 ? `${product.stock} disponível` : "Fora de estoque",
-            inline: true,
-          },
-          {
-            name: "Categoria",
-            value: product.categoryId ? `ID: ${product.categoryId}` : "Sem categoria",
-            inline: false,
           },
         ],
-        image: product.imageUrl ? { url: product.imageUrl } : undefined,
-        footer: {
-          text: `ID do Produto: ${product.id}`,
-        },
-      }));
+        footer: t("productFooter", { id: product.id }),
+        thumbnailUrl: product.imageUrl || undefined,
+      });
+    });
 
-      // Main shop embed
-      const shopEmbed = {
-        title: "🛍️ Marketplace",
-        description: "Bem-vindo à nossa loja! Confira os produtos disponíveis.",
-        color: 0x5865f2,
-        fields: [
-          {
-            name: "Categorias Disponíveis",
-            value: categories.length > 0 
+    // Main shop embed
+    const shopEmbed = buildEmbed({
+      title: t("title"),
+      description: t("description"),
+      color: 0x5865f2,
+      fields: [
+        {
+          name: t("categories"),
+          value:
+            categories.length > 0
               ? categories.map((c: any) => `${c.emoji || "📦"} ${c.name}`).join("\n")
-              : "Nenhuma categoria disponível",
-            inline: false,
-          },
-          {
-            name: "Produtos em Destaque",
-            value: featured.length > 0 
-              ? featured.map((p: any) => `• **${p.name}** - R$ ${p.price}`).join("\n")
-              : "Nenhum produto disponível",
-            inline: false,
-          },
-        ],
-        footer: {
-          text: "Use /shop browse para ver todos os produtos",
+              : t("empty"),
+          inline: false,
         },
-      };
+        {
+          name: t("products"),
+          value:
+            pageProducts.length > 0
+              ? pageProducts.map((p: any) => `• **${p.name}** - R$ ${p.price}`).join("\n")
+              : t("empty"),
+          inline: false,
+        },
+      ],
+      footer: `Página ${safePage} de ${totalPages} | ${allProducts.length} produto(s)`,
+    });
 
-      return {
-        type: 4, // CHANNEL_MESSAGE_WITH_SOURCE
-        data: {
-          embeds: [shopEmbed, ...productEmbeds],
-          components: [
-            {
-              type: 1, // ACTION_ROW
-              components: [
-                {
-                  type: 2, // BUTTON
-                  style: 1, // PRIMARY
-                  label: "Ver Todos os Produtos",
-                  custom_id: "shop_browse",
-                },
-                {
-                  type: 2, // BUTTON
-                  style: 1, // PRIMARY
-                  label: "Meu Carrinho",
-                  custom_id: "cart_view",
-                },
-              ],
-            },
-            {
-              type: 1, // ACTION_ROW
-              components: [
-                {
-                  type: 3, // SELECT_MENU
-                  custom_id: "category_select",
-                  placeholder: "Selecione uma categoria",
-                  options: categories.map((c: any) => ({
-                    label: c.name,
-                    value: c.id.toString(),
-                    emoji: c.emoji ? { name: c.emoji } : undefined,
-                  })),
-                },
-              ],
-            },
-          ],
-        },
-      };
-    } catch (error) {
-      console.error("Shop command error:", error);
-      return {
-        type: 4,
-        data: {
-          content: "❌ Erro ao carregar a loja. Tente novamente mais tarde.",
-          flags: 64, // EPHEMERAL
-        },
-      };
+    const components: any[] = [];
+    const navButtons: Array<{ customId: string; label: string; style: ButtonStyle }> = [];
+
+    if (safePage > 1) {
+      navButtons.push({
+        customId: `shop_page_${safePage - 1}`,
+        label: "⬅️ Anterior",
+        style: ButtonStyle.Secondary,
+      });
     }
+
+    navButtons.push({
+      customId: "cart_view",
+      label: t("addToCart").includes("Carrinho") ? "🛒 Meu Carrinho" : "🛒 My Cart",
+      style: ButtonStyle.Primary,
+    });
+
+    if (safePage < totalPages) {
+      navButtons.push({
+        customId: `shop_page_${safePage + 1}`,
+        label: "Próximo ➡️",
+        style: ButtonStyle.Secondary,
+      });
+    }
+    
+    components.push(buildButtonRow(navButtons).toJSON());
+
+    // Category select menu (only if categories exist)
+    if (categories.length > 0) {
+      components.push(
+        buildSelectMenuRow({
+          customId: "category_select",
+          placeholder: t("placeholder"),
+          options: categories.map((c: any) => ({
+            label: c.name,
+            value: c.id.toString(),
+            emoji: c.emoji ? { name: c.emoji } : undefined,
+          })),
+        }).toJSON(),
+      );
+    }
+
+    return createEmbedResponse({
+      embeds: [shopEmbed.toJSON(), ...productEmbeds.map((e) => e.toJSON())],
+      components,
+    });
   }
 }

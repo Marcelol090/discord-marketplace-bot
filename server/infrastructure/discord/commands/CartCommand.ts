@@ -1,225 +1,162 @@
-import { injectable } from "tsyringe";
+import { CartService } from "../../../domain/services/CartService";
+import { ProductService } from "../../../domain/services/ProductService";
+import { DiscordUserResolver } from "../DiscordUserResolver";
+import { ButtonStyle } from "discord.js";
+import { i18n, getLocale } from "../../i18n";
+import { buildButtonRow, buildEmbed } from "../discordMessageBuilders";
+import { createEmbedResponse, createEphemeralResponse } from "../discordInteractionResponses";
 
-interface CartItem {
-  mapId: number;
-  name: string;
-  price: number;
-  quantity: number;
-}
-
-interface UserCart {
-  userId: string;
-  items: CartItem[];
-  total: number;
-}
-
-@injectable()
+/**
+ * CartCommand — Discord interaction handler for cart operations.
+ * Delegates all business logic to domain CartService via DiscordUserResolver bridge.
+ */
 export class CartCommand {
-  private userCarts: Map<string, UserCart> = new Map();
+  constructor(
+    private cartService: CartService,
+    private productService: ProductService,
+    private resolver: DiscordUserResolver,
+  ) {}
 
-  handleViewCart(userId: string) {
-    const cart = this.userCarts.get(userId);
+  async handleViewCart(discordId: string, username: string, discordLocale?: string) {
+    const locale = getLocale(discordLocale);
+    const t = i18n.getFixedT(locale, "translation", "cart");
+    
+    try {
+      const userId = await this.resolver.resolve(discordId, username);
+      const cart = await this.cartService.getCart(userId);
+      const items = cart.getItems();
 
-    if (!cart || cart.items.length === 0) {
-      return {
-        type: 4,
-        data: {
-          content: "🛒 Seu carrinho está vazio!\n\nUse `/comprar` para adicionar mapas.",
-          flags: 64,
-        },
-      };
-    }
+      if (items.length === 0) {
+        return createEphemeralResponse({
+          content: t("empty") + "\n\nUse `/shop` para adicionar produtos.",
+        });
+      }
 
-    const itemsList = cart.items
-      .map(
-        (item) =>
-          `• **${item.name}** - R$ ${item.price.toFixed(2)} x${item.quantity} = R$ ${(item.price * item.quantity).toFixed(2)}`
-      )
-      .join("\n");
+      const itemDetails = await Promise.all(
+        items.map(async (item) => {
+          const product = await this.productService.getProductById(item.productId);
+          return {
+            name: product?.name || `Produto #${item.productId}`,
+            price: product ? parseFloat(product.price) : 0,
+            quantity: item.quantity,
+          };
+        }),
+      );
 
-    return {
-      type: 4,
-      data: {
-        embeds: [
+      const total = await this.cartService.getCartTotal(userId);
+
+      const itemsList = itemDetails
+        .map(
+          (item) =>
+            `• **${item.name}** - R$ ${item.price.toFixed(2)} x${item.quantity} = R$ ${(item.price * item.quantity).toFixed(2)}`,
+        )
+        .join("\n");
+
+      const embed = buildEmbed({
+        title: t("title"),
+        description: itemsList,
+        color: 0x3b82f6,
+        fields: [
           {
-            title: "🛒 Seu Carrinho",
-            description: itemsList,
-            color: 0x3b82f6,
-            fields: [
-              {
-                name: "📊 Resumo",
-                value: `Total de itens: ${cart.items.length}\nValor total: **R$ ${cart.total.toFixed(2)}**`,
-                inline: false,
-              },
-            ],
-            footer: {
-              text: "Use os botões abaixo para gerenciar seu carrinho",
-            },
+            name: "📊 Resumo",
+            value: `${t("totalItems", { count: items.length })}\nValor total: **R$ ${total}**`,
+            inline: false,
           },
         ],
-        components: [
-          {
-            type: 1,
-            components: [
-              {
-                type: 2,
-                label: "💳 Ir para Checkout",
-                custom_id: "btn-checkout",
-                style: 1, // Primary
-              },
-              {
-                type: 2,
-                label: "🗑️ Limpar Carrinho",
-                custom_id: "btn-clear-cart",
-                style: 4, // Danger
-              },
-              {
-                type: 2,
-                label: "🛍️ Continuar Comprando",
-                custom_id: "btn-continue-shopping",
-                style: 2, // Secondary
-              },
-            ],
-          },
-        ],
-      },
-    };
-  }
+        footer: "Use os botões abaixo para gerenciar seu carrinho",
+      });
 
-  addToCart(userId: string, mapId: number, name: string, price: number) {
-    if (!this.userCarts.has(userId)) {
-      this.userCarts.set(userId, { userId, items: [], total: 0 });
-    }
+      const row = buildButtonRow([
+        { customId: "btn-checkout", label: "💳 Checkout", style: ButtonStyle.Primary },
+        { customId: "btn-clear-cart", label: "🗑️ Limpar Carrinho", style: ButtonStyle.Danger },
+        {
+          customId: "btn-continue-shopping",
+          label: "🛍️ Continuar Comprando",
+          style: ButtonStyle.Secondary,
+        },
+      ]);
 
-    const cart = this.userCarts.get(userId)!;
-    const existingItem = cart.items.find((item) => item.mapId === mapId);
-
-    if (existingItem) {
-      existingItem.quantity += 1;
-    } else {
-      cart.items.push({ mapId, name, price, quantity: 1 });
-    }
-
-    this.updateCartTotal(cart);
-
-    return {
-      type: 4,
-      data: {
-        content: `✅ **${name}** adicionado ao carrinho!\n\n💰 Valor: R$ ${price.toFixed(2)}\n🛒 Total do carrinho: R$ ${cart.total.toFixed(2)}`,
-        flags: 64,
-      },
-    };
-  }
-
-  removeFromCart(userId: string, mapId: number) {
-    const cart = this.userCarts.get(userId);
-
-    if (!cart) {
+      return createEmbedResponse({
+        embeds: [embed.toJSON()],
+        components: [row.toJSON()],
+      });
+    } catch (error) {
+      console.error("CartCommand.handleViewCart error:", error);
       return {
         type: 4,
         data: {
-          content: "❌ Carrinho não encontrado",
+          content: t("error"),
           flags: 64,
         },
       };
     }
-
-    const itemIndex = cart.items.findIndex((item) => item.mapId === mapId);
-
-    if (itemIndex === -1) {
-      return {
-        type: 4,
-        data: {
-          content: "❌ Item não encontrado no carrinho",
-          flags: 64,
-        },
-      };
-    }
-
-    const removedItem = cart.items[itemIndex];
-    cart.items.splice(itemIndex, 1);
-    this.updateCartTotal(cart);
-
-    return {
-      type: 4,
-      data: {
-        content: `✅ **${removedItem.name}** removido do carrinho!\n\n🛒 Total do carrinho: R$ ${cart.total.toFixed(2)}`,
-        flags: 64,
-      },
-    };
   }
 
-  updateQuantity(userId: string, mapId: number, quantity: number) {
-    const cart = this.userCarts.get(userId);
+  async addToCart(discordId: string, username: string, productId: number, quantity: number = 1, discordLocale?: string) {
+    const locale = getLocale(discordLocale);
+    const t = i18n.getFixedT(locale, "translation", "cart");
 
-    if (!cart) {
-      return {
-        type: 4,
-        data: {
-          content: "❌ Carrinho não encontrado",
-          flags: 64,
-        },
-      };
+    try {
+      const userId = await this.resolver.resolve(discordId, username);
+      await this.cartService.addToCart(userId, productId, quantity);
+
+      const product = await this.productService.getProductById(productId);
+      const name = product?.name || `Produto #${productId}`;
+      const price = product ? parseFloat(product.price) : 0;
+
+      return createEphemeralResponse({
+        content: `${t("addSuccess")}\n\n**${name}**\n💰 Valor: R$ ${price.toFixed(2)}\n📦 Quantidade: ${quantity}`,
+      });
+    } catch (error: any) {
+      const message = error.message === "Insufficient stock"
+        ? "❌ Estoque insuficiente para este produto."
+        : error.message === "Product not found"
+          ? "❌ Produto não encontrado."
+          : t("addError");
+
+      return createEphemeralResponse({ content: message });
     }
-
-    const item = cart.items.find((item) => item.mapId === mapId);
-
-    if (!item) {
-      return {
-        type: 4,
-        data: {
-          content: "❌ Item não encontrado no carrinho",
-          flags: 64,
-        },
-      };
-    }
-
-    if (quantity <= 0) {
-      return this.removeFromCart(userId, mapId);
-    }
-
-    item.quantity = quantity;
-    this.updateCartTotal(cart);
-
-    return {
-      type: 4,
-      data: {
-        content: `✅ Quantidade de **${item.name}** atualizada para ${quantity}!\n\n🛒 Total do carrinho: R$ ${cart.total.toFixed(2)}`,
-        flags: 64,
-      },
-    };
   }
 
-  clearCart(userId: string) {
-    const cart = this.userCarts.get(userId);
+  async removeFromCart(discordId: string, username: string, productId: number, discordLocale?: string) {
+    const locale = getLocale(discordLocale);
+    const t = i18n.getFixedT(locale, "translation", "cart");
 
-    if (!cart || cart.items.length === 0) {
-      return {
-        type: 4,
-        data: {
-          content: "❌ Seu carrinho já está vazio",
-          flags: 64,
-        },
-      };
+    try {
+      const userId = await this.resolver.resolve(discordId, username);
+      await this.cartService.removeFromCart(userId, productId);
+
+      return createEphemeralResponse({ content: t("removeSuccess") });
+    } catch (error) {
+      return createEphemeralResponse({ content: t("removeError") });
     }
-
-    cart.items = [];
-    cart.total = 0;
-
-    return {
-      type: 4,
-      data: {
-        content: "✅ Carrinho limpo com sucesso!",
-        flags: 64,
-      },
-    };
   }
 
-  getCart(userId: string): UserCart | undefined {
-    return this.userCarts.get(userId);
+  async updateQuantity(discordId: string, username: string, productId: number, quantity: number, discordLocale?: string) {
+    const locale = getLocale(discordLocale);
+    
+    try {
+      const userId = await this.resolver.resolve(discordId, username);
+      await this.cartService.updateCartItemQuantity(userId, productId, quantity);
+
+      return createEphemeralResponse({ content: `✅ Quantidade atualizada para ${quantity}!` });
+    } catch (error: any) {
+      return createEphemeralResponse({
+        content: error.message === "Item not found in cart"
+          ? "❌ Item não encontrado no carrinho."
+          : "❌ Erro ao atualizar quantidade.",
+      });
+    }
   }
 
-  private updateCartTotal(cart: UserCart) {
-    cart.total = cart.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  async clearCart(discordId: string, username: string, discordLocale?: string) {
+    try {
+      const userId = await this.resolver.resolve(discordId, username);
+      await this.cartService.clearCart(userId);
+
+      return createEphemeralResponse({ content: "✅ Carrinho limpo com sucesso!" });
+    } catch (error) {
+      return createEphemeralResponse({ content: "❌ Erro ao limpar o carrinho." });
+    }
   }
 }

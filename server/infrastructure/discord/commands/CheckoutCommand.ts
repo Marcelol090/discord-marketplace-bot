@@ -1,248 +1,224 @@
-import { injectable } from "tsyringe";
+import { CartService } from "../../../domain/services/CartService";
+import { OrderService } from "../../../domain/services/OrderService";
+import { PaymentService } from "../../../domain/services/PaymentService";
+import { ProductService } from "../../../domain/services/ProductService";
+import { DiscordUserResolver } from "../DiscordUserResolver";
+import { ButtonStyle } from "discord.js";
+import { i18n, getLocale } from "../../i18n";
+import { buildButtonRow, buildEmbed } from "../discordMessageBuilders";
+import { createEmbedResponse, createEphemeralResponse } from "../discordInteractionResponses";
 
-interface CheckoutData {
-  userId: string;
-  total: number;
-  items: Array<{ name: string; price: number; quantity: number }>;
-  paymentMethod?: "pix" | "stripe";
+interface CartItemRef {
+  productId: number;
+  quantity: number;
 }
 
-@injectable()
+/**
+ * CheckoutCommand — Discord interaction handler for checkout flow.
+ * Bridges Discord interactions to domain OrderService + PaymentService.
+ */
 export class CheckoutCommand {
-  private checkouts: Map<string, CheckoutData> = new Map();
+  constructor(
+    private cartService: CartService,
+    private orderService: OrderService,
+    private paymentService: PaymentService,
+    private productService: ProductService,
+    private resolver: DiscordUserResolver,
+  ) {}
 
-  handleCheckout(userId: string, total: number, items: any[]) {
-    const checkoutId = `checkout-${userId}-${Date.now()}`;
-    const checkoutData: CheckoutData = { userId, total, items };
+  /**
+   * Initial checkout — show payment method selection
+   */
+  async handleCheckout(discordId: string, username: string, discordLocale?: string) {
+    const locale = getLocale(discordLocale);
+    const t = i18n.getFixedT(locale, "translation", "checkout");
 
-    this.checkouts.set(checkoutId, checkoutData);
+    try {
+      const userId = await this.resolver.resolve(discordId, username);
+      const cart = await this.cartService.getCart(userId);
+      const items = cart.getItems();
 
-    return {
-      type: 4,
-      data: {
-        embeds: [
-          {
-            title: "💳 Escolha o Método de Pagamento",
-            description: `Total a pagar: **R$ ${total.toFixed(2)}**\n\nEscolha como deseja pagar:`,
-            color: 0x8b5cf6,
-            fields: [
-              {
-                name: "🔑 PIX",
-                value: "Pagamento instantâneo via PIX (recomendado)",
-                inline: false,
-              },
-              {
-                name: "💳 Cartão de Crédito",
-                value: "Pagamento com Stripe (parcelado em até 12x)",
-                inline: false,
-              },
-            ],
-            footer: {
-              text: "Clique no botão correspondente ao seu método de pagamento",
-            },
-          },
+      if (items.length === 0) {
+        return createEphemeralResponse({ content: t("empty") });
+      }
+
+      const total = await this.cartService.getCartTotal(userId);
+
+      // Resolve product names for display
+      const itemDetails = await Promise.all(
+        items.map(async (item) => {
+          const product = await this.productService.getProductById(item.productId);
+          return {
+            name: product?.name || `Produto #${item.productId}`,
+            price: product ? parseFloat(product.price) : 0,
+            quantity: item.quantity,
+          };
+        }),
+      );
+
+      const itemsList = itemDetails
+        .map((item) => `• **${item.name}** x${item.quantity} — R$ ${(item.price * item.quantity).toFixed(2)}`)
+        .join("\n");
+
+      const embed = buildEmbed({
+        title: t("title"),
+        description: `${itemsList}\n\n${t("total", { total })}\n\n${t("selectMethod")}`,
+        color: 0x8b5cf6,
+        fields: [
+          { name: "🔑 PIX", value: "Pagamento instantâneo via PIX (recomendado)", inline: false },
+          { name: "💳 Cartão de Crédito", value: "Pagamento com Stripe (parcelado em até 12x)", inline: false },
         ],
-        components: [
-          {
-            type: 1,
-            components: [
-              {
-                type: 2,
-                label: "🔑 Pagar com PIX",
-                custom_id: `btn-pay-pix-${checkoutId}`,
-                style: 3, // Green
-              },
-              {
-                type: 2,
-                label: "💳 Pagar com Cartão",
-                custom_id: `btn-pay-stripe-${checkoutId}`,
-                style: 1, // Primary
-              },
-            ],
-          },
-        ],
-      },
-    };
-  }
+        footer: "Clique no botão correspondente ao seu método de pagamento",
+      });
 
-  handlePixPayment(userId: string, checkoutId: string, total: number) {
-    // Simular geração de QR Code PIX
-    const pixQrCode = this.generatePixQrCode(userId, total);
-    const pixKey = "703.421.081-07";
+      const row = buildButtonRow([
+        { customId: "btn-pay-pix", label: "🔑 Pagar com PIX", style: ButtonStyle.Success },
+        { customId: "btn-pay-stripe", label: "💳 Pagar com Cartão", style: ButtonStyle.Primary },
+        { customId: "btn-cancel-checkout", label: "❌ Cancelar", style: ButtonStyle.Danger },
+      ]);
 
-    return {
-      type: 4,
-      data: {
-        embeds: [
-          {
-            title: "🔑 Pagamento via PIX",
-            description: "Escaneie o QR Code abaixo ou copie a chave PIX",
-            color: 0x10b981,
-            image: {
-              url: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(pixQrCode)}`,
-            },
-            fields: [
-              {
-                name: "💰 Valor",
-                value: `**R$ ${total.toFixed(2)}**`,
-                inline: true,
-              },
-              {
-                name: "⏱️ Vencimento",
-                value: "30 minutos",
-                inline: true,
-              },
-              {
-                name: "🔑 Chave PIX (CPF)",
-                value: `\`${pixKey}\``,
-                inline: false,
-              },
-              {
-                name: "📋 Referência",
-                value: `\`${checkoutId}\``,
-                inline: false,
-              },
-            ],
-            footer: {
-              text: "Após confirmar o pagamento, você receberá os arquivos automaticamente",
-            },
-          },
-        ],
-        components: [
-          {
-            type: 1,
-            components: [
-              {
-                type: 2,
-                label: "✅ Já Paguei",
-                custom_id: `btn-confirm-pix-${checkoutId}`,
-                style: 3, // Green
-              },
-              {
-                type: 2,
-                label: "❌ Cancelar",
-                custom_id: "btn-cancel-checkout",
-                style: 4, // Danger
-              },
-            ],
-          },
-        ],
-      },
-    };
-  }
-
-  handleStripePayment(userId: string, checkoutId: string, total: number) {
-    // Simular geração de link Stripe
-    const stripeLink = `https://checkout.stripe.com/pay/cs_test_${Math.random().toString(36).substring(7)}`;
-
-    return {
-      type: 4,
-      data: {
-        embeds: [
-          {
-            title: "💳 Pagamento com Cartão",
-            description: "Clique no botão abaixo para ir para o checkout seguro do Stripe",
-            color: 0x635bff,
-            fields: [
-              {
-                name: "💰 Valor",
-                value: `**R$ ${total.toFixed(2)}**`,
-                inline: true,
-              },
-              {
-                name: "🔒 Segurança",
-                value: "SSL Encriptado",
-                inline: true,
-              },
-              {
-                name: "📋 Referência",
-                value: `\`${checkoutId}\``,
-                inline: false,
-              },
-            ],
-            footer: {
-              text: "Você será redirecionado para o Stripe para completar o pagamento",
-            },
-          },
-        ],
-        components: [
-          {
-            type: 1,
-            components: [
-              {
-                type: 2,
-                label: "💳 Ir para Stripe",
-                custom_id: `btn-stripe-redirect-${checkoutId}`,
-                style: 1, // Primary
-                url: stripeLink,
-              },
-              {
-                type: 2,
-                label: "❌ Cancelar",
-                custom_id: "btn-cancel-checkout",
-                style: 4, // Danger
-              },
-            ],
-          },
-        ],
-      },
-    };
-  }
-
-  handlePaymentConfirmation(userId: string, checkoutId: string, paymentMethod: "pix" | "stripe") {
-    const checkout = this.checkouts.get(checkoutId);
-
-    if (!checkout) {
-      return {
-        type: 4,
-        data: {
-          content: "❌ Checkout não encontrado",
-          flags: 64,
-        },
-      };
+      return createEmbedResponse({
+        embeds: [embed.toJSON()],
+        components: [row.toJSON()],
+      });
+    } catch (error) {
+      console.error("CheckoutCommand.handleCheckout error:", error);
+      return createEphemeralResponse({ content: t("error") });
     }
-
-    const itemsList = checkout.items
-      .map((item) => `• ${item.name} x${item.quantity}`)
-      .join("\n");
-
-    return {
-      type: 4,
-      data: {
-        embeds: [
-          {
-            title: "✅ Pagamento Confirmado!",
-            description: `Seu pedido foi confirmado com sucesso!\n\n**Itens:**\n${itemsList}`,
-            color: 0x10b981,
-            fields: [
-              {
-                name: "💰 Total Pago",
-                value: `R$ ${checkout.total.toFixed(2)}`,
-                inline: true,
-              },
-              {
-                name: "💳 Método",
-                value: paymentMethod === "pix" ? "🔑 PIX" : "💳 Cartão",
-                inline: true,
-              },
-              {
-                name: "📦 Entrega",
-                value: "Os arquivos serão enviados em breve via DM",
-                inline: false,
-              },
-            ],
-            footer: {
-              text: `Pedido ID: ${checkoutId}`,
-            },
-          },
-        ],
-      },
-    };
   }
 
-  private generatePixQrCode(userId: string, total: number): string {
-    // Simular geração de QR Code PIX
-    // Em produção, isso seria integrado com MercadoPago ou similar
-    return `00020126580014br.gov.bcb.pix0136703.421.081-07${total.toFixed(2)}5204000053039865802BR5913BOREAS6009SAO PAULO62410503***63041D3D`;
+  /**
+   * PIX payment flow — create order + generate QR code
+   */
+  async handlePixPayment(
+    discordId: string,
+    username: string,
+    totalAmount: string,
+    cartItems: CartItemRef[],
+    discordLocale?: string
+  ) {
+    const locale = getLocale(discordLocale);
+    const t = i18n.getFixedT(locale, "translation", "checkout");
+
+    try {
+      const userId = await this.resolver.resolve(discordId, username);
+
+      // Create order in the domain layer
+      const order = await this.orderService.createOrder({
+        userId,
+        discordUserId: discordId,
+        totalAmount,
+        paymentMethod: "pix",
+      });
+
+      // Generate PIX QR Code
+      const pixResult = await this.paymentService.generatePixQrCode({
+        amount: totalAmount,
+        description: `Pedido #${order.id}`,
+        orderId: order.id,
+      });
+
+      if (!pixResult.success) {
+        return createEphemeralResponse({ content: t("pixQrError") });
+      }
+
+      // Clear cart after order creation
+      await this.cartService.clearCart(userId);
+
+      const embed = buildEmbed({
+        title: t("pixTitle"),
+        description: t("pixDesc"),
+        color: 0x10b981,
+        fields: [
+          { name: "💰 Valor", value: t("pixValue", { total: parseFloat(totalAmount).toFixed(2) }), inline: true },
+          { name: "⏱️ Vencimento", value: t("pixExpiry"), inline: true },
+          { name: "📋 Pedido", value: t("pixOrder", { id: order.id }), inline: false },
+        ],
+        footer: t("pixFooter"),
+      });
+
+      if (pixResult.qrCode) {
+        embed.setImage(pixResult.qrCode);
+      }
+
+      if (pixResult.copyPaste) {
+        embed.addFields({ name: "📋 Copia e Cola", value: t("pixCopyPaste", { key: pixResult.copyPaste }), inline: false });
+      }
+
+      const row = buildButtonRow([
+        { customId: `btn-confirm-pix-${order.id}`, label: "✅ Já Paguei", style: ButtonStyle.Success },
+        { customId: `btn-cancel-order-${order.id}`, label: "❌ Cancelar", style: ButtonStyle.Danger },
+      ]);
+
+      return createEmbedResponse({
+        embeds: [embed.toJSON()],
+        components: [row.toJSON()],
+      });
+    } catch (error) {
+      console.error("CheckoutCommand.handlePixPayment error:", error);
+      return createEphemeralResponse({ content: t("pixError") });
+    }
+  }
+
+  /**
+   * Card payment flow — create order + process via Stripe
+   */
+  async handleCardPayment(
+    discordId: string,
+    username: string,
+    totalAmount: string,
+    token: string,
+    cartItems: CartItemRef[],
+    discordLocale?: string
+  ) {
+    const locale = getLocale(discordLocale);
+    const t = i18n.getFixedT(locale, "translation", "checkout");
+
+    try {
+      const userId = await this.resolver.resolve(discordId, username);
+
+      const order = await this.orderService.createOrder({
+        userId,
+        discordUserId: discordId,
+        totalAmount,
+        paymentMethod: "credit_card",
+      });
+
+      const cardResult = await this.paymentService.processCardPayment({
+        amount: totalAmount,
+        description: `Pedido #${order.id}`,
+        orderId: order.id,
+        token,
+      });
+
+      if (!cardResult.success) {
+        return createEphemeralResponse({
+          content: t("cardFailed", { error: cardResult.error || "erro desconhecido" }),
+        });
+      }
+
+      // Mark order as paid
+      await this.orderService.markOrderAsPaid(order.id, cardResult.paymentId);
+
+      // Clear cart
+      await this.cartService.clearCart(userId);
+
+      const embed = buildEmbed({
+        title: t("cardSuccessTitle"),
+        description: t("cardSuccessDesc", { id: order.id }),
+        color: 0x10b981,
+        fields: [
+          { name: "💰 Total Pago", value: `R$ ${parseFloat(totalAmount).toFixed(2)}`, inline: true },
+          { name: "💳 Método", value: t("cardMethod"), inline: true },
+          { name: "📦 Entrega", value: t("cardDelivery"), inline: false },
+        ],
+        footer: `Pedido #${order.id} | ${cardResult.paymentId}`,
+      });
+
+      return createEmbedResponse({ embeds: [embed.toJSON()] });
+    } catch (error) {
+      console.error("CheckoutCommand.handleCardPayment error:", error);
+      return createEphemeralResponse({ content: t("cardError") });
+    }
   }
 }
