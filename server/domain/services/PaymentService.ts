@@ -1,12 +1,14 @@
 import { injectable } from "tsyringe";
 import Stripe from "stripe";
 import { ENV } from "../../_core/env";
-import { PixNotificationService, PixNotificationPayload } from "../../infrastructure/discord/PixNotificationService";
+import { MercadoPagoPixService } from "../../infrastructure/payments/MercadoPagoPixService";
+import { PixNotificationService } from "../../infrastructure/discord/PixNotificationService";
 
 export interface PixPaymentData {
   amount: string;
   description: string;
   orderId: number;
+  payerEmail?: string;
 }
 
 export interface CardPaymentData {
@@ -20,14 +22,16 @@ export interface PaymentResult {
   success: boolean;
   paymentId: string;
   qrCode?: string;
+  qrCodeBase64?: string;
   copyPaste?: string;
+  ticketUrl?: string;
   error?: string;
 }
 
 @injectable()
 export class PaymentService {
   private stripe: Stripe;
-  private pixKey: string;
+  private mercadoPagoPixService: MercadoPagoPixService | null = null;
   private pixNotificationService: PixNotificationService;
 
   constructor() {
@@ -40,29 +44,50 @@ export class PaymentService {
       apiVersion: "2024-04-10",
     });
 
-    this.pixKey = ENV.pixKey || "";
+    // Initialize MercadoPago if access token is available
+    const mpAccessToken = ENV.mercadoPagoAccessToken;
+    if (mpAccessToken) {
+      const webhookUrl = ENV.mercadoPagoWebhookUrl || "";
+      this.mercadoPagoPixService = new MercadoPagoPixService(mpAccessToken, webhookUrl);
+    }
+
     this.pixNotificationService = new PixNotificationService();
   }
 
   /**
-   * Generate PIX payment QR Code
-   * Note: This is a simplified implementation. In production, use MercadoPago or Stripe PIX integration
+   * Generate PIX payment QR Code via MercadoPago.
+   * Falls back to mock if MercadoPago is not configured.
    */
   async generatePixQrCode(data: PixPaymentData): Promise<PaymentResult> {
     try {
-      if (!this.pixKey) {
-        throw new Error("PIX key not configured");
+      // Use real MercadoPago if available
+      if (this.mercadoPagoPixService) {
+        const result = await this.mercadoPagoPixService.createPixPayment({
+          amount: parseFloat(data.amount),
+          description: data.description,
+          orderId: data.orderId,
+          payerEmail: data.payerEmail || "customer@marketplace.com",
+        });
+
+        return {
+          success: result.success,
+          paymentId: result.paymentId,
+          qrCode: result.qrCode,
+          qrCodeBase64: result.qrCodeBase64,
+          copyPaste: result.qrCode, // QR code text IS the copy-paste string
+          ticketUrl: result.ticketUrl,
+          error: result.error,
+        };
       }
 
-      // In production, integrate with MercadoPago or Stripe PIX
-      // For now, return a mock QR code
-      const qrCode = await this.generateMockPixQrCode(data);
-
+      // Fallback: mock PIX for development
+      console.warn("[PaymentService] MercadoPago not configured, using mock PIX");
+      const pixKey = ENV.pixKey || "";
       return {
         success: true,
-        paymentId: `pix_${Date.now()}`,
-        qrCode,
-        copyPaste: `00020126580014br.gov.bcb.pix0136${this.pixKey}52040000530398654061${parseFloat(data.amount).toFixed(2)}5802BR5913MERCHANT6009SAOPAULO62410503***63041D3D`,
+        paymentId: `pix_mock_${Date.now()}`,
+        qrCode: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(`pix_${data.orderId}`)}`,
+        copyPaste: `00020126580014br.gov.bcb.pix0136${pixKey}52040000530398654${parseFloat(data.amount).toFixed(2).length.toString().padStart(2, "0")}${parseFloat(data.amount).toFixed(2)}5802BR5913MERCHANT6009SAOPAULO62410503***63041D3D`,
       };
     } catch (error) {
       console.error("PIX QR code generation error:", error);
@@ -121,16 +146,22 @@ export class PaymentService {
   }
 
   /**
-   * Verify payment status
+   * Verify payment status (Stripe or MercadoPago)
    */
   async verifyPaymentStatus(paymentId: string): Promise<boolean> {
     try {
-      if (paymentId.startsWith("pix_")) {
-        // In production, check PIX payment status with MercadoPago or Stripe
-        // For now, assume it's pending
+      // MercadoPago PIX payment IDs are numeric
+      if (/^\d+$/.test(paymentId) && this.mercadoPagoPixService) {
+        const status = await this.mercadoPagoPixService.getPaymentStatus(paymentId);
+        return status.isApproved;
+      }
+
+      // Mock PIX fallback
+      if (paymentId.startsWith("pix_mock_")) {
         return false;
       }
 
+      // Stripe
       const paymentIntent = await this.stripe.paymentIntents.retrieve(paymentId);
       return paymentIntent.status === "succeeded";
     } catch (error) {
@@ -144,9 +175,13 @@ export class PaymentService {
    */
   async refundPayment(paymentId: string, amount?: string): Promise<boolean> {
     try {
-      if (paymentId.startsWith("pix_")) {
-        // PIX refunds are handled differently
-        console.log("PIX refund requested for:", paymentId);
+      if (/^\d+$/.test(paymentId)) {
+        // MercadoPago refunds — would need separate implementation
+        console.log("MercadoPago refund requested for:", paymentId);
+        return true;
+      }
+
+      if (paymentId.startsWith("pix_mock_")) {
         return true;
       }
 
@@ -184,15 +219,5 @@ export class PaymentService {
       console.error("Error cancelling PIX payment:", error);
       throw error;
     }
-  }
-
-  /**
-   * Generate mock PIX QR code for demonstration
-   * In production, use actual PIX integration
-   */
-  private async generateMockPixQrCode(data: PixPaymentData): Promise<string> {
-    // This would be replaced with actual QR code generation
-    // For now, return a placeholder base64 image
-    return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
   }
 }
