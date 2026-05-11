@@ -44,10 +44,6 @@ export class SlashCommandRegistry {
           name: "orders",
           description: "Ver histórico de seus pedidos",
         },
-        {
-          name: "admin",
-          description: "Painel administrativo (apenas para admins)",
-        },
       ];
 
       const url = `https://discord.com/api/v10/applications/${this.applicationId}/commands`;
@@ -112,10 +108,6 @@ export class SlashCommandRegistry {
         {
           name: "orders",
           description: "Ver histórico de seus pedidos",
-        },
-        {
-          name: "admin",
-          description: "Painel administrativo (apenas para admins)",
         },
       ];
 
