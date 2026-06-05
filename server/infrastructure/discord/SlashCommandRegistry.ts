@@ -48,35 +48,39 @@ export class SlashCommandRegistry {
 
       const url = `https://discord.com/api/v10/applications/${this.applicationId}/commands`;
 
-      for (const command of commands) {
-        try {
-          const response = await axios.post(url, command, {
-            headers: {
-              Authorization: `Bot ${this.botToken}`,
-              "Content-Type": "application/json",
-            },
-          });
-          console.log(`✅ Comando /${command.name} registrado com sucesso`);
-        } catch (error: any) {
-          if (error.response?.status === 400) {
-            console.log(`⚠️  Comando /${command.name} já existe, atualizando...`);
-            // Atualizar comando existente
-            const existingCommands = await this.getGlobalCommands();
-            const existing = existingCommands.find((c: any) => c.name === command.name);
-            if (existing) {
-              await axios.patch(`${url}/${existing.id}`, command, {
-                headers: {
-                  Authorization: `Bot ${this.botToken}`,
-                  "Content-Type": "application/json",
-                },
-              });
-              console.log(`✅ Comando /${command.name} atualizado com sucesso`);
+      // Fetch existing commands once to avoid redundant calls in the loop
+      const existingCommands = await this.getGlobalCommands();
+
+      await Promise.all(
+        commands.map(async (command) => {
+          try {
+            await axios.post(url, command, {
+              headers: {
+                Authorization: `Bot ${this.botToken}`,
+                "Content-Type": "application/json",
+              },
+            });
+            console.log(`✅ Comando /${command.name} registrado com sucesso`);
+          } catch (error: any) {
+            if (error.response?.status === 400) {
+              console.log(`⚠️  Comando /${command.name} já existe, atualizando...`);
+              // Atualizar comando existente
+              const existing = existingCommands.find((c: any) => c.name === command.name);
+              if (existing) {
+                await axios.patch(`${url}/${existing.id}`, command, {
+                  headers: {
+                    Authorization: `Bot ${this.botToken}`,
+                    "Content-Type": "application/json",
+                  },
+                });
+                console.log(`✅ Comando /${command.name} atualizado com sucesso`);
+              }
+            } else {
+              console.error(`❌ Erro ao registrar comando /${command.name}:`, error.message);
             }
-          } else {
-            console.error(`❌ Erro ao registrar comando /${command.name}:`, error.message);
           }
-        }
-      }
+        }),
+      );
     } catch (error) {
       console.error("Erro ao registrar comandos slash:", error);
     }
@@ -113,23 +117,25 @@ export class SlashCommandRegistry {
 
       const url = `https://discord.com/api/v10/applications/${this.applicationId}/guilds/${this.serverId}/commands`;
 
-      for (const command of commands) {
-        try {
-          await axios.post(url, command, {
-            headers: {
-              Authorization: `Bot ${this.botToken}`,
-              "Content-Type": "application/json",
-            },
-          });
-          console.log(`✅ Comando /${command.name} registrado no servidor`);
-        } catch (error: any) {
-          if (error.response?.status === 400) {
-            console.log(`⚠️  Comando /${command.name} já existe`);
-          } else {
-            console.error(`❌ Erro ao registrar comando /${command.name}:`, error.message);
+      await Promise.all(
+        commands.map(async (command) => {
+          try {
+            await axios.post(url, command, {
+              headers: {
+                Authorization: `Bot ${this.botToken}`,
+                "Content-Type": "application/json",
+              },
+            });
+            console.log(`✅ Comando /${command.name} registrado no servidor`);
+          } catch (error: any) {
+            if (error.response?.status === 400) {
+              console.log(`⚠️  Comando /${command.name} já existe`);
+            } else {
+              console.error(`❌ Erro ao registrar comando /${command.name}:`, error.message);
+            }
           }
-        }
-      }
+        }),
+      );
     } catch (error) {
       console.error("Erro ao registrar comandos do servidor:", error);
     }
