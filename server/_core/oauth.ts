@@ -1,8 +1,10 @@
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import type { Express, Request, Response } from "express";
-import * as db from "../db";
+import { UserRepository } from "../infrastructure/repositories/UserRepository";
 import { getSessionCookieOptions } from "./cookies";
 import { sdk } from "./sdk";
+
+const userRepository = new UserRepository();
 
 function getQueryParam(req: Request, key: string): string | undefined {
   const value = req.query[key];
@@ -28,7 +30,7 @@ export function registerOAuthRoutes(app: Express) {
         return;
       }
 
-      await db.upsertUser({
+      await userRepository.upsert({
         openId: userInfo.openId,
         name: userInfo.name || null,
         email: userInfo.email ?? null,
