@@ -53,7 +53,7 @@ export function registerDiscordWebhookRoutes(): Router {
           (request as any).rawBody ||
           (typeof request.body === "string" ? request.body : JSON.stringify(request.body));
 
-        if (discordPublicKey && !webhookService.verifySignature(rawBody, signature, timestamp)) {
+        if (!discordPublicKey || !webhookService.verifySignature(rawBody, signature, timestamp)) {
           return reply.status(401).send({ error: "Invalid signature" });
         }
 
